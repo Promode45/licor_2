@@ -1,0 +1,81 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+```{r}
+#|echo: false
+library(tidyverse)
+library(janitor)
+library(readr)
+library(rstatix)
+#install.packages("FSA")
+library(FSA)
+#install.packages("rcompanion")
+library(rcompanion)
+#install.packages("plotly")
+library(plotly)
+#install.packages("ggpubr")
+library(ggpubr)
+#install.packages("reshape")
+library(reshape)
+
+```
+
+```{r}
+#| echo: false
+resp_data <- list.files(path = "/Users/pramodhegde/Library/CloudStorage/OneDrive-UniversityofGeorgia/Documents/Licor",
+                        pattern = "*.csv",
+                        full.names = T) %>% 
+  lapply(read.csv, skip =3, header = F) %>% 
+  bind_rows 
+colnames(resp_data) <- c("co2", "date_time", "label", "swc", "flux", "ts", "ta")
+resp_data_w <- resp_data %>% 
+  na.omit() 
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+```{r}
+remove_outliers <- function(x, na.rm = TRUE, ...) {
+  qnt <- quantile(x, probs=c(.25, .75), na.rm = na.rm, ...)
+  H <- 1.5 * IQR(x, na.rm = na.rm)
+  y <- x
+  y[x < (qnt[1] - H)] <- NA
+  y[x > (qnt[2] + H)] <- NA
+  y
+  print(y)
+}
+```
+
+```{r}
+resp_data_w <- resp_data_w %>% 
+  clean_names() %>% 
+  mutate(date_time = as.POSIXct(date_time, tz = Sys.timezone(), format="%Y/%m/%d %H:%M:%S")) %>% 
+  mutate(label = factor(label)) %>% 
+  mutate(day = day(date_time)) %>% 
+  mutate(month = month(date_time)) %>% 
+  mutate(treatment = case_when( label %in% c(1,8,12,20,23) ~ "Disturbance",
+                                label %in% c(3,10,14,17,24,2,9,11,19,25) ~ "NPK",
+                                label %in% c(4,7,15,16,22) ~ "Control", 
+                                label %in% c(5,6,13,18,21) ~ "NPK+Disturbance",
+                                .default = "Outside_treatments"
+    )) 
+```
+At each plot, three measurements were made. In some plots, one of the three readings seemed to be off due to instrument problems, these were corrected using the IQR method. values beyond the bounds were converted to the mean of the three readings. 
+
+```{r}
+multiplier <- 1.5
+resp_data_w |> 
+  group_by(label,day,month) |> 
+  mutate(iqr = IQR(swc, na.rm = T)) |> 
+  mutate(lower_bound = quantile(swc, 0.25)- iqr  , 
+         upper_bound = quantile(swc, 0.75)+ iqr, 
+         mean = mean(swc, na.rm = T)) |> 
+  ungroup() |> 
+  mutate(swc = case_when(swc < lower_bound ~ mean,
+                         swc > upper_bound ~ upper_bound,
+                         .default = swc
+                         )) 
+```
+
