@@ -20,6 +20,14 @@ library(plotly)
 library(ggpubr)
 #install.packages("reshape")
 library(reshape)
+#install.packages("sciplot")
+library(sciplot)
+#install.packages("nlme")
+library(nlme)
+library(lme4)
+library(emmeans)
+library(broom)
+library(multcomp)
 
 ```
 
@@ -32,7 +40,9 @@ resp_data <- list.files(path = "/Users/pramodhegde/Library/CloudStorage/OneDrive
   bind_rows 
 colnames(resp_data) <- c("co2", "date_time", "label", "swc", "flux", "ts", "ta")
 resp_data_w <- resp_data %>% 
-  na.omit() 
+  na.omit() |> 
+  filter(label != "Test")
+
 ```
 
 The `echo: false` option disables the printing of code (only output is displayed).
@@ -60,13 +70,76 @@ resp_data_w <- resp_data_w %>%
                                 label %in% c(4,7,15,16,22) ~ "Control", 
                                 label %in% c(5,6,13,18,21) ~ "NPK+Disturbance",
                                 .default = "Outside_treatments"
-    )) 
+    )) |> 
+  mutate( drying_cycle = case_when( day ==29 & month == 01 ~ "1",
+                                    day == 30 & month == 01 ~"1" ,
+                                    day == 31 & month == 01 ~ "1", 
+                                    day == 05 ~ "2", 
+                                    day == 06 ~ "2", 
+                                    day == 07 ~ "2",
+                                    day == 27 & month == 03 ~ "3",
+                                    day== 28 & month == 03 ~ "3",
+                                    day == 29 & month == 03 ~ "3",
+                                    day == 01 & month == 04 ~ "3", 
+                                    month == 7 ~ "4", 
+                                    month == 8 ~ "4",
+                                    .default = "0"
+                                    
+    
+    
+    
+  )) |> 
+  mutate(dar = case_when(
+    day ==29 & month == 01 ~ "1",
+    day == 30 & month == 01 ~"2" ,
+    day == 31 & month == 01 ~ "3",
+    day == 05 ~ "1",
+    day == 06 ~ "2",
+    day == 07 ~ "3",
+    day == 27 & month == 03 ~ "1",
+     day== 28 & month == 03 ~ "2",
+    day == 29 & month == 03 ~ "3",
+    day == 01 & month == 04 ~ "6",
+    day == 30 & month == 07 ~ "1",
+     day == 31 & month == 07 ~ "2",
+    day == 01 & month == 08 ~ "3",
+    day == 02 & month == 08 ~ "4",
+    .default = "0"
+    
+    
+  )
+           
+           ) |> 
+   mutate(
+    rep = case_when
+    (label %in% c(1:5) ~ "1",
+    label %in%  c(6:10) ~ "2",
+      label %in%  c(11:15) ~ "3",
+      label %in%  c(16:20) ~ "4", 
+      label %in%  c(21:25) ~ "5",
+      .default = "None"
+     )
+  ) |> 
+  mutate(fdar = factor(dar),
+         treatment = factor(treatment),
+         label = factor(label),
+         rep = factor(rep)) |> 
+  filter(!treatment == "Outside_treatments") 
+
+resp_data_w |> 
+  mutate(interval = for i in day(date_time))
+resp_data_w |> 
+  tail()
+ filter(drying_cycle == 4) |> 
+  select(label, day, month) |> 
+  distinct()
+
 ```
 At each plot, three measurements were made. In some plots, one of the three readings seemed to be off due to instrument problems, these were corrected using the IQR method. values beyond the bounds were converted to the mean of the three readings. 
 
 ```{r}
 multiplier <- 1.5
-resp_data_w |> 
+resp_data_w <- resp_data_w |> 
   group_by(label,day,month) |> 
   mutate(iqr = IQR(swc, na.rm = T)) |> 
   mutate(lower_bound = quantile(swc, 0.25)- iqr  , 
@@ -76,6 +149,102 @@ resp_data_w |>
   mutate(swc = case_when(swc < lower_bound ~ mean,
                          swc > upper_bound ~ upper_bound,
                          .default = swc
-                         )) 
+                         )) |> 
+  select(!c(lower_bound,iqr,upper_bound,mean))
+```
+
+```{r}
+resp_data_w |> 
+  filter(!treatment == "Outside_treatments") |> 
+  group_by(day,month) |> 
+  ggplot(aes(treatment, flux))+
+  geom_boxplot()
+```
+
+```{r}
+resp_data_subset <- subset(resp_data_w, treatment != "Outside_treatments", select = c(treatment, flux))
+lineplot.CI(x.factor = treatment, response = flux, data = resp_data_subset)
+#ggsave("Output/linegraph_CI.jpg")
+```
+
+```{r}
+
+```
+
+```{r}
+resp_data_w |> 
+  filter(!treatment == "Outside_treatments") |> 
+  ggscatter(x = "swc", y = "flux",
+            color = "treatment", add = "reg.line")+
+  stat_regline_equation(
+    aes(label = paste(after_stat(eq.label), ..rr.label.., sep = "~~~~"), color = treatment))
+```
+Kruskall-Wallis test
+```{r}
+kruskal.test(flux ~ treatment, data = resp_data_w)
+pwc <- pairwise.wilcox.test(resp_data_w$flux, resp_data_w$treatment,
+                            p.adjust.method = "BH")
+dunnt <- dunnTest(x = resp_data_w$flux, g = resp_data_w$treatment, method = "bonferroni")
+dunns <- dunnt$res
+cld <- cldList(comparison = dunns$Comparison,
+               p.value = dunns$P.adj,
+               threshold = 0.05)
+names(cld)[1] <- "treatment"
+
+resp_data_w |> 
+  filter(!treatment == "Outside_treatments") |> 
+  group_by(day,month) |> 
+  ggplot(aes(treatment, flux))+
+  geom_boxplot()
+```
+
+
+```{r}
+options(contrasts = c("contr.sum", "contr.poly"))
+
+mix_mod <- lme(flux ~ treatment *fdar,
+               random = ~ 1| rep/label,
+               data = resp_data_w)
+mix_mod
+Anova(mix_mod, type = 3)
+
+```
+
+```{r}
+# edit from here
+library(ggstatsplot)
+library(tibble)
+dat <- resp_data_w
+x <- "treatment"
+cols <- 4:7 # the 4 continuous dependent variables
+type <- "parametric" # given the large number of observations, we use the parametric version
+paired <- FALSE # FALSE for independent samples, TRUE for paired samples
+# edit until here
+
+# edit at your own risk
+plotlist <-
+  purrr::pmap(
+    .l = list(
+      data = list(as_tibble(dat)),
+      x = x,
+      y = as.list(colnames(dat)[cols]),
+      plot.type = "box", # for boxplot
+      type = type, # parametric or nonparametric
+      pairwise.comparisons = TRUE, # to run post-hoc tests if more than 2 groups
+      pairwise.display = "significant", # show only significant differences
+      bf.message = FALSE, # remove message about Bayes Factor
+      centrality.plotting = FALSE # remove central measure
+    ),
+    .f = ifelse(paired, # automatically use ggwithinstats if paired samples, ggbetweenstats otherwise
+      ggstatsplot::ggwithinstats,
+      ggstatsplot::ggbetweenstats
+    ),
+    violin.args = list(width = 0, linewidth = 0) # remove violin plots and keep only boxplots
+  )
+
+# print all plots together with statistical results
+for (i in 1:length(plotlist)) {
+  print(plotlist[[i]])
+}
 ```
 
