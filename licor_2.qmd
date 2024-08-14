@@ -28,6 +28,7 @@ library(lme4)
 library(emmeans)
 library(broom)
 library(multcomp)
+library(car)
 
 ```
 
@@ -124,15 +125,32 @@ resp_data_w <- resp_data_w %>%
          treatment = factor(treatment),
          label = factor(label),
          rep = factor(rep)) |> 
-  filter(!treatment == "Outside_treatments") 
-
-resp_data_w |> 
-  mutate(interval = for i in day(date_time))
-resp_data_w |> 
-  tail()
- filter(drying_cycle == 4) |> 
-  select(label, day, month) |> 
-  distinct()
+  filter(!treatment == "Outside_treatments") |> 
+  mutate(time = yday(date_time) - 28) |> 
+  mutate(ftime = factor(time))
+  
+  #|> 
+  mutate(time = case_when(day == 29 & month == 01 ~ "T0",
+                                    day == 30 & month == 01 ~"T1" ,
+                                    day == 31 & month == 01 ~ "T2", 
+                                    day == 05 ~ "T3", 
+                                    day == 06 ~ "T4", 
+                                    day == 07 ~ "T5",
+                                    day == 25 & month == 03 ~ "T6",
+                                    day == 27 & month == 03 ~ "T7",
+                                    day== 28 & month == 03 ~ "T8",
+                                    day == 29 & month == 03 ~ "T9",
+                                    day == 01 & month == 04 ~ "T10", 
+                                    day == 30 & month == 7 ~ "T11", 
+                                    day == 31 & month == 7 ~ "T12",
+                                    day == 01 & month == 8 ~ "T13"
+                                    day == 02 & month == 8 ~ "T14",
+                                    .default = "0"
+                                    
+    
+    
+    
+  ))
 
 ```
 At each plot, three measurements were made. In some plots, one of the three readings seemed to be off due to instrument problems, these were corrected using the IQR method. values beyond the bounds were converted to the mean of the three readings. 
@@ -149,8 +167,7 @@ resp_data_w <- resp_data_w |>
   mutate(swc = case_when(swc < lower_bound ~ mean,
                          swc > upper_bound ~ upper_bound,
                          .default = swc
-                         )) |> 
-  select(!c(lower_bound,iqr,upper_bound,mean))
+                         )) 
 ```
 
 ```{r}
@@ -166,9 +183,17 @@ resp_data_subset <- subset(resp_data_w, treatment != "Outside_treatments", selec
 lineplot.CI(x.factor = treatment, response = flux, data = resp_data_subset)
 #ggsave("Output/linegraph_CI.jpg")
 ```
+Homogeneity of variance
+```{r}
+leveneTest(flux~treatment, data = resp_data_w)
+```
+Cannot reject null-hypotheses, therefore we can say that the variances are same for the groups. We move forward with a parametric test (anova)
 
 ```{r}
-
+hist(resp_data_w$flux)
+qqPlot(final_dryingcycle$flux)
+resp_data_w |> 
+  filter(swc < 0.1)
 ```
 
 ```{r}
@@ -179,7 +204,7 @@ resp_data_w |>
   stat_regline_equation(
     aes(label = paste(after_stat(eq.label), ..rr.label.., sep = "~~~~"), color = treatment))
 ```
-Kruskall-Wallis test
+ Not required - Kruskall-Wallis test
 ```{r}
 kruskal.test(flux ~ treatment, data = resp_data_w)
 pwc <- pairwise.wilcox.test(resp_data_w$flux, resp_data_w$treatment,
@@ -191,30 +216,58 @@ cld <- cldList(comparison = dunns$Comparison,
                threshold = 0.05)
 names(cld)[1] <- "treatment"
 
-resp_data_w |> 
-  filter(!treatment == "Outside_treatments") |> 
-  group_by(day,month) |> 
-  ggplot(aes(treatment, flux))+
-  geom_boxplot()
 ```
 
-
+code chunk from [https://statsandr.com/blog/how-to-do-a-t-test-or-anova-for-many-variables-at-once-in-r-and-communicate-the-results-in-a-better-way/]
+The below chunk does anova for each variable, if differences are found pairwise comparisons are done as well. 
+Holm correction is applied to p-values to avoid false-positives
 ```{r}
-options(contrasts = c("contr.sum", "contr.poly"))
 
-mix_mod <- lme(flux ~ treatment *fdar,
-               random = ~ 1| rep/label,
-               data = resp_data_w)
-mix_mod
-Anova(mix_mod, type = 3)
-
-```
-
-```{r}
 # edit from here
 library(ggstatsplot)
 library(tibble)
 dat <- resp_data_w
+x <- "treatment"
+cols <- 4:7 # the 4 continuous dependent variables
+type <- "parametric" # given the large number of observations, we use the parametric version
+paired <- F # FALSE for independent samples, TRUE for paired samples
+# edit until here
+
+# edit at your own risk
+plotlist <-
+  purrr::pmap(
+    .l = list(
+      data = list(as_tibble(dat)),
+      x = x,
+      y = as.list(colnames(dat)[cols]),
+      plot.type = "box", # for boxplot
+      type = type, # parametric or nonparametric
+      pairwise.comparisons = TRUE, # to run post-hoc tests if more than 2 groups
+      pairwise.display = "significant", # show only significant differences
+      bf.message = FALSE, # remove message about Bayes Factor
+      centrality.plotting = FALSE # remove central measure
+    ),
+    .f = ifelse(paired, # automatically use ggwithinstats if paired samples, ggbetweenstats otherwise
+      ggstatsplot::ggwithinstats,
+      ggstatsplot::ggbetweenstats
+    ),
+    violin.args = list(width = 0, linewidth = 0) # remove violin plots and keep only boxplots
+  )
+
+# print all plots together with statistical results
+for (i in 1:length(plotlist)) {
+  print(plotlist[[i]])
+}
+#ggsave("Output/anova_flux.jpg")
+```
+only final drying cycle
+```{r}
+final_dryingcycle <- resp_data_w |> 
+  filter(drying_cycle == 4)
+
+library(ggstatsplot)
+library(tibble)
+dat <- final_dryingcycle
 x <- "treatment"
 cols <- 4:7 # the 4 continuous dependent variables
 type <- "parametric" # given the large number of observations, we use the parametric version
@@ -246,5 +299,62 @@ plotlist <-
 for (i in 1:length(plotlist)) {
   print(plotlist[[i]])
 }
+
+```
+anova - to be continued later 
+
+```{r}
+options(contrasts = c("contr.sum", "contr.poly"))
+
+mix_mod <- lme(flux ~ treatment *ftime,
+               random = ~ 1| rep/label,
+               data = resp_data_w)
+mix_mod
+Anova(mix_mod, type = 3)
+
+mod2_ma <- lme(flux ~ treatment*ftime,
+                random = ~1 |rep/label,
+               correlation = corARMA(p = 1, q = 1),
+                data = resp_data_w)
+
+mod3_exp <- lme(flux ~ treatment*ftime,
+                random = ~1 |rep/label,
+               correlation = corExp(form = ~time),
+                data = resp_data_w)
+```
+
+subsetting different drying cycles 
+```{r}
+event1 <- resp_data_w |> 
+  filter(drying_cycle == 1) 
+
+library(ggstatsplot)
+library(ggpubr)
+
+# boxplots of different treatments, with kruskal-wallis test for flux v/s treatment, and wilcox pairwise test. 
+my_comparison <- list(c("Control", "NPK"), c("Control", "NPK+Disturbance"))
+ggboxplot(event1, x = "treatment" , y = "flux",
+          add = "jitter", color = "treatment")+
+  geom_hline(yintercept = mean(event1$flux), linetype = 2)+
+  stat_compare_means(method = "kruskal.test", label.y = 3.0)+
+  stat_compare_means(ref.group = ".all.", label = "p.signif", hide.ns = T)
+
+# line plot with the same variables as above
+ggline(event1, x = "treatment" , y = "flux", add = "mean_se")+
+  stat_compare_means(label.y = 2.0)+
+  stat_compare_means(ref.group = ".all.", label = "p.signif", hide.ns = T, label.y = 1.5)
+
+
+```
+Boxplot of flux v/s days after rain with boxes of different colors based on the treatment
+```{r}
+ggboxplot(event1, x = "fdar", y = "flux", color = "treatment", add = "jitter")+
+  stat_compare_means(aes(group = treatment))+
+  stat_compare_means(aes(group = treatment),label = "p.signif", label.y = 1.7)
+
+ggline(event1, x = "fdar", y = "flux", color = "treatment", add = "mean_se")+
+  stat_compare_means(aes(group = treatment))+
+  stat_compare_means(aes(group = treatment), label = "p.signif", label.y = 1.7)
+  
 ```
 
