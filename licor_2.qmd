@@ -126,32 +126,31 @@ resp_data_w <- resp_data_w %>%
          label = factor(label),
          rep = factor(rep)) |> 
   filter(!treatment == "Outside_treatments") |> 
-  mutate(time = yday(date_time) - 28) |> 
-  mutate(ftime = factor(time))
-  
-  #|> 
-  mutate(time = case_when(day == 29 & month == 01 ~ "T0",
-                                    day == 30 & month == 01 ~"T1" ,
-                                    day == 31 & month == 01 ~ "T2", 
-                                    day == 05 ~ "T3", 
-                                    day == 06 ~ "T4", 
-                                    day == 07 ~ "T5",
-                                    day == 25 & month == 03 ~ "T6",
-                                    day == 27 & month == 03 ~ "T7",
-                                    day== 28 & month == 03 ~ "T8",
-                                    day == 29 & month == 03 ~ "T9",
-                                    day == 01 & month == 04 ~ "T10", 
-                                    day == 30 & month == 7 ~ "T11", 
-                                    day == 31 & month == 7 ~ "T12",
-                                    day == 01 & month == 8 ~ "T13"
-                                    day == 02 & month == 8 ~ "T14",
+  #mutate(time = yday(date_time) - 28) |> 
+  mutate(time_of_day = if_else(am(date_time),"am","pm")) |> 
+  mutate(time = case_when(day == 29 & month == 01 ~ "1",
+                                    day == 30 & month == 01 ~"2" ,
+                                    day == 31 & month == 01 ~ "3", 
+                                    day == 05 ~ "4", 
+                                    day == 06 ~ "5", 
+                                    day == 07 ~ "6",
+                                    day == 25 & month == 03 ~ "7",
+                                    day == 27 & month == 03 & time_of_day == "am" ~ "8",
+                                    day == 27 & month == 3 & time_of_day == "pm" ~ "9",
+                                    day== 28 & month == 03 ~ "10",
+                                    day == 29 & month == 03 ~ "11",
+                                    day == 01 & month == 04 ~ "12", 
+                                    day == 30 & month == 7 & time_of_day == "am" ~ "13", 
+                                    day == 30 & month == 7 & time_of_day == "pm"~ "14",
+                                    day == 31 & month == 7 ~ "15",
+                                    day == 01 & month == 8 ~ "16",
+                                    day == 02 & month == 8 ~ "17",
                                     .default = "0"
                                     
-    
-    
-    
-  ))
-
+   )) |> 
+  mutate(time = as.numeric(time)) |> 
+  mutate(ftime = factor(time)) |> 
+  filter(!swc < 0.01)
 ```
 At each plot, three measurements were made. In some plots, one of the three readings seemed to be off due to instrument problems, these were corrected using the IQR method. values beyond the bounds were converted to the mean of the three readings. 
 
@@ -204,10 +203,28 @@ resp_data_w |>
   stat_regline_equation(
     aes(label = paste(after_stat(eq.label), ..rr.label.., sep = "~~~~"), color = treatment))
 ```
+
+```{r}
+resp_final <-
+  resp_data_w |> 
+  summarise(flux = mean(flux),
+            swc = mean(swc),
+            ts = mean(ts),
+            ta = mean(ta),
+            date_time = mean(date_time),
+            .by = c("label","day","month","time_of_day","treatment","drying_cycle","ftime","time","rep","dar","fdar")) |> 
+    ungroup() 
+
+resp_final
+```
+ 
+ 
+ 
+ 
  Not required - Kruskall-Wallis test
 ```{r}
-kruskal.test(flux ~ treatment, data = resp_data_w)
-pwc <- pairwise.wilcox.test(resp_data_w$flux, resp_data_w$treatment,
+kruskal.test(flux ~ treatment, data = resp_final)
+pwc <- pairwise.wilcox.test(resp_final$flux, resp_final$treatment,
                             p.adjust.method = "BH")
 dunnt <- dunnTest(x = resp_data_w$flux, g = resp_data_w$treatment, method = "bonferroni")
 dunns <- dunnt$res
@@ -226,9 +243,9 @@ Holm correction is applied to p-values to avoid false-positives
 # edit from here
 library(ggstatsplot)
 library(tibble)
-dat <- resp_data_w
+dat <- resp_final
 x <- "treatment"
-cols <- 4:7 # the 4 continuous dependent variables
+cols <- 12:15 # the 4 continuous dependent variables
 type <- "parametric" # given the large number of observations, we use the parametric version
 paired <- F # FALSE for independent samples, TRUE for paired samples
 # edit until here
@@ -253,23 +270,24 @@ plotlist <-
     ),
     violin.args = list(width = 0, linewidth = 0) # remove violin plots and keep only boxplots
   )
-
+length(plotlist)
 # print all plots together with statistical results
 for (i in 1:length(plotlist)) {
   print(plotlist[[i]])
+  #ggsave(filename = paste0("plot_",i,".png"), plot = plotlist[[i]], width = 7, height = 5, dpi = 300)
 }
-#ggsave("Output/anova_flux.jpg")
+#save("Output/anova_flux.jpg")
 ```
 only final drying cycle
 ```{r}
-final_dryingcycle <- resp_data_w |> 
+final_dryingcycle <- resp_final |> 
   filter(drying_cycle == 4)
 
 library(ggstatsplot)
 library(tibble)
 dat <- final_dryingcycle
 x <- "treatment"
-cols <- 4:7 # the 4 continuous dependent variables
+cols <- 11:14 # the 4 continuous dependent variables
 type <- "parametric" # given the large number of observations, we use the parametric version
 paired <- FALSE # FALSE for independent samples, TRUE for paired samples
 # edit until here
@@ -298,6 +316,8 @@ plotlist <-
 # print all plots together with statistical results
 for (i in 1:length(plotlist)) {
   print(plotlist[[i]])
+  
+  #ggsave(plotlist[[i]], file = paste0("plot_", i,".png"), width = 14, height = 10, units = "cm")
 }
 
 ```
@@ -308,26 +328,53 @@ options(contrasts = c("contr.sum", "contr.poly"))
 
 mix_mod <- lme(flux ~ treatment *ftime,
                random = ~ 1| rep/label,
-               data = resp_data_w)
+               data = resp_final)
 mix_mod
 Anova(mix_mod, type = 3)
 
 mod2_ma <- lme(flux ~ treatment*ftime,
                 random = ~1 |rep/label,
                correlation = corARMA(p = 1, q = 1),
-                data = resp_data_w)
+                data = resp_final)
 
 mod3_exp <- lme(flux ~ treatment*ftime,
-                random = ~1 |rep/label,
-               correlation = corExp(form = ~time),
-                data = resp_data_w)
+                random = ~ 1|rep/treatment,
+               correlation = corExp(form = ~ftime),
+                data = resp_final)
+
+ACF(mod3_exp, resType = "n") |> 
+  plot(alpha = 0.01)
+anova(mix_mod,mod2_ma,mod3_exp)
+```
+```{r fig.width= 8, fig.height= 5}
+resp_final1 <- resp_final
+resp_final1$date_time <- factor(format(resp_final$date_time, format = "%m-%d"))
+resp_final1 <- resp_final1 |> 
+  mutate(date_time = if_else(time_of_day == "pm", date_time, as.POSIXct(date_time)+lubridate::hours(30)))
+resp_final1 |> 
+  group_by(date_time,treatment, time_of_day) |> 
+  summarise(mean_flux = mean(flux, na.rm = T)) |> 
+  ggplot(aes(date_time, mean_flux, group = treatment, color = treatment))+
+  geom_line()+
+  geom_point()+
+    theme(axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))
+ggsave("timeseries.jpg", width = 10, height = 10)
 ```
 
 subsetting different drying cycles 
 ```{r}
-event1 <- resp_data_w |> 
+event1 <- resp_final|> 
   filter(drying_cycle == 1) 
+event2 <- resp_final |> 
+  filter(drying_cycle == 2)
+event3 <- resp_final |> 
+  filter(drying_cycle ==3)
+event4 <- resp_final |> 
+  filter(drying_cycle == 4) 
+```
 
+# drying cycle 1 
+```{r}
 library(ggstatsplot)
 library(ggpubr)
 
@@ -344,17 +391,166 @@ ggline(event1, x = "treatment" , y = "flux", add = "mean_se")+
   stat_compare_means(label.y = 2.0)+
   stat_compare_means(ref.group = ".all.", label = "p.signif", hide.ns = T, label.y = 1.5)
 
-
 ```
-Boxplot of flux v/s days after rain with boxes of different colors based on the treatment
+
+# Boxplot and lineplot of flux v/s days after rain with boxes of different colors based on the treatment
 ```{r}
 ggboxplot(event1, x = "fdar", y = "flux", color = "treatment", add = "jitter")+
   stat_compare_means(aes(group = treatment))+
   stat_compare_means(aes(group = treatment),label = "p.signif", label.y = 1.7)
 
-ggline(event1, x = "fdar", y = "flux", color = "treatment", add = "mean_se")+
-  stat_compare_means(aes(group = treatment))+
+event1_lp <- ggline(event1, x = "fdar", y = "flux", color = "treatment", add = "mean_se")+
+  labs(x = "days after rain",
+             y = "soil respiration",
+       title = "Drying cycle 1")+
+  theme(plot.margin = unit(c(0,0.2,0,0.2), 'lines'))+
   stat_compare_means(aes(group = treatment), label = "p.signif", label.y = 1.7)
-  
+#ggsave("Output/flux_event1.jpg")
+
+```
+# Flux- drying cycle 2 
+Plots of flux v/s days after rain for drying cycle 2
+```{r}
+event2_lp <- ggline(event2, x = "fdar", y = "flux", color = "treatment", add = "mean_se")+
+  labs(x = "days after rain",
+             y = "soil respiration",
+       title = "Drying cycle 2")+
+  theme(plot.margin = unit(c(0,0.2,0,0.2), 'lines'))+
+  stat_compare_means(aes(group = treatment), label = "p.signif", label.y = 1.3)
+```
+# Flux - drying cycle 3 
+```{r}
+event3_lp <- ggline(event3, x = "fdar", y = "flux", color = "treatment", add = "mean_se", facet.by = "time_of_day")+
+  labs(x = "days after rain",
+             y = "soil respiration",
+       title = "Drying cycle 3")+
+  theme(plot.margin = unit(c(1,1,1,1), 'lines'))+
+  stat_compare_means(aes(group = treatment), label = "p.signif")
+
+event3 |> 
+  group_by(fdar, treatment, time_of_day) |> 
+  summarise(mean_flux = mean(flux, na.rm = T)) |> 
+ggplot(aes(fdar, mean_flux, color = treatment, shape = time_of_day))+
+  geom_line(aes(group = interaction(treatment, time_of_day)))+
+  geom_point()
+```
+
+# FLux - drying cycle 4 
+```{r}
+event4_lp <- ggline(event4, x = "fdar", y = "flux", color = "treatment", add = "mean_se",
+                    facet.by = "time_of_day")+
+  labs(x = "days after rain",
+             y = "soil respiration",
+       title = "Drying cycle 4")+
+  theme(plot.margin = unit(c(1,1,1,1), 'lines'))+
+  stat_compare_means(aes(group = treatment), label = "p.signif", label.y = 5)
+
+```
+Combining all four events in one plot 
+```{r fig.width=9, fig.height=11}
+fig <- ggarrange(event1_lp+rremove("xlab"), event2_lp+rremove("xlab")+rremove("ylab"), event3_lp,event4_lp+rremove("ylab"),
+                 labels = NA,
+                 label.y = 1,
+                 ncol = 2, nrow = 2,
+                 common.legend = T,
+                 label.x = 0.5,
+                 legend = "right"
+                 
+                 )
+fig_final <- annotate_figure(fig, top = text_grob("Flux across events",size = 14, face = "bold", x = 0.4)
+                             )
+
+#ggsave(filename = "flux_combined.jpg",
+       plot = fig_final,
+       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+       height = 195,# 
+       units = "mm",
+       dpi = 200,
+       device = "bmp"
+)
+```
+
+
+# Moisture - drying cycle 1
+
+```{r}
+event1_moisture <- ggline(event1, x = "fdar", y = "swc", color = "treatment", add = "mean_se")+
+  labs(x = "days after rain",
+             y = "soil moisture",
+       title = "Drying cycle 1")+
+  theme(plot.margin = unit(c(0,0.2,0,0.2), 'lines'))+
+  stat_compare_means(aes(group = treatment), label = "p.signif", label.y = 0.4)
+
+ pairwise_comparison <-  
+  pairwise.wilcox.test(x = event1$swc, g = event1$treatment, p.adjust.method = "bonferroni")
+pairwise_comparison$p.value
+```
+# Moisture - drying cycle 2
+```{r}
+event2_moisture <- ggline(event2, x = "fdar", y = "swc", color = "treatment", add = "mean_se")+
+   labs(x = "days after rain",
+             y = "soil moisture",
+       title = "Drying cycle 2")+
+  theme(plot.margin = unit(c(0,0.2,0,0.2), 'lines'))+
+  stat_compare_means(aes(group = treatment), label = "p.signif", label.y = 0.4)
+```
+# Moisture - drying cycle 3
+```{r}
+event3_moisture <- ggline(event3, x = "fdar", y = "swc", color = "treatment", add = "mean_se")+
+  labs(x = "days after rain",
+             y = "soil moisture",
+       title = "Drying cycle 3")+
+  theme(plot.margin = unit(c(1,1,1,1), 'lines'))+
+  stat_compare_means(aes(group = treatment), label = "p.signif", label.y = 0.4)
+```
+# Moisture - drying cycle 3
+```{r}
+event4_moisture <- ggline(event4, x = "fdar", y = "swc", color = "treatment", add = "mean_se")+
+  labs(x = "days after rain",
+             y = "soil moisture",
+       title = "Drying cycle 4")+
+  theme(plot.margin = unit(c(1,1,1,1), 'lines'))+
+  stat_compare_means(aes(group = treatment), label = "p.signif", label.y = 0.4)
+```
+
+```{r fig.width=9, fig.height=11}
+fig_moisture <- ggarrange(event1_moisture+rremove("xlab"), event2_moisture+rremove("xlab")+rremove("ylab"), event3_moisture,event4_moisture+rremove("ylab"),
+                 labels = NA,
+                 label.y = 1,
+                 ncol = 2, nrow = 2,
+                 common.legend = T,
+                 label.x = 0.5,
+                 legend = "right"
+                 
+                 )
+fig_final_moisture <- annotate_figure(fig_moisture, top = text_grob("Flux across events",size = 14, face = "bold", x = 0.4))
+
+ggsave(filename = "moisture_combined.jpg",
+       plot = fig_final_moisture,
+       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+       height = 195,# 
+       units = "mm",
+       dpi = 200,
+       device = "bmp"
+)
+```
+
+
+
+
+```{r}
+set.seed(123)
+install.packages("rstantools")
+
+ggbetweenstats(
+  data = resp_final,
+  x = treatment,
+  y = flux,
+  nboot = 10
+)
+```
+```{r}
+redat <- make.rm(constant = c("label"),
+                 repeated = "flux", data = resp_data_w)
 ```
 
