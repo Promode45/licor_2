@@ -151,6 +151,7 @@ resp_data_w <- resp_data_w %>%
   mutate(time = as.numeric(time)) |> 
   mutate(ftime = factor(time)) |> 
   filter(!swc < 0.01)
+#write.csv(resp_data_w, "Data/licor_wrangled.csv")
 ```
 At each plot, three measurements were made. In some plots, one of the three readings seemed to be off due to instrument problems, these were corrected using the IQR method. values beyond the bounds were converted to the mean of the three readings. 
 
@@ -171,7 +172,7 @@ resp_data_w <- resp_data_w |>
 
 ```{r}
 resp_data_w |> 
-  filter(!treatment == "Outside_treatments") |> 
+  filter(!drying_cycle == 4) |> 
   group_by(day,month) |> 
   ggplot(aes(treatment, flux))+
   geom_boxplot()
@@ -216,6 +217,7 @@ resp_final <-
     ungroup() 
 
 resp_final
+#write.csv(resp_final, "Data/licor_aggregated.csv")
 ```
  
  
@@ -287,7 +289,7 @@ library(ggstatsplot)
 library(tibble)
 dat <- final_dryingcycle
 x <- "treatment"
-cols <- 11:14 # the 4 continuous dependent variables
+cols <- 12:15 # the 4 continuous dependent variables
 type <- "parametric" # given the large number of observations, we use the parametric version
 paired <- FALSE # FALSE for independent samples, TRUE for paired samples
 # edit until here
@@ -358,7 +360,8 @@ resp_final1 |>
   geom_line()+
   geom_point()+
     theme(axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))
-ggsave("timeseries.jpg", width = 10, height = 10)
+
+#ggsave("timeseries.jpg", width = 10, height = 10)
 ```
 
 subsetting different drying cycles 
@@ -368,9 +371,11 @@ event1 <- resp_final|>
 event2 <- resp_final |> 
   filter(drying_cycle == 2)
 event3 <- resp_final |> 
-  filter(drying_cycle ==3)
+  filter(drying_cycle ==3) |> 
+  filter(!time_of_day == "pm")
 event4 <- resp_final |> 
-  filter(drying_cycle == 4) 
+  filter(drying_cycle == 4) |> 
+  filter(!time_of_day == "pm")
 ```
 
 # drying cycle 1 
@@ -420,13 +425,13 @@ event2_lp <- ggline(event2, x = "fdar", y = "flux", color = "treatment", add = "
 ```
 # Flux - drying cycle 3 
 ```{r}
-event3_lp <- ggline(event3, x = "fdar", y = "flux", color = "treatment", add = "mean_se", facet.by = "time_of_day")+
+event3_lp <- ggline(event3, x = "fdar", y = "flux", color = "treatment", add = "mean_se")+
   labs(x = "days after rain",
              y = "soil respiration",
        title = "Drying cycle 3")+
   theme(plot.margin = unit(c(1,1,1,1), 'lines'))+
   stat_compare_means(aes(group = treatment), label = "p.signif")
-
+#ggsave("afternoon_outdc3.jpg")
 event3 |> 
   group_by(fdar, treatment, time_of_day) |> 
   summarise(mean_flux = mean(flux, na.rm = T)) |> 
@@ -437,13 +442,14 @@ ggplot(aes(fdar, mean_flux, color = treatment, shape = time_of_day))+
 
 # FLux - drying cycle 4 
 ```{r}
-event4_lp <- ggline(event4, x = "fdar", y = "flux", color = "treatment", add = "mean_se",
-                    facet.by = "time_of_day")+
+event4_lp <- ggline(event4, x = "fdar", y = "flux", color = "treatment", add = "mean_se"
+                   )+
   labs(x = "days after rain",
              y = "soil respiration",
        title = "Drying cycle 4")+
   theme(plot.margin = unit(c(1,1,1,1), 'lines'))+
   stat_compare_means(aes(group = treatment), label = "p.signif", label.y = 5)
+#ggsave("afternoon_outdc4.jpg")
 
 ```
 Combining all four events in one plot 
@@ -525,7 +531,7 @@ fig_moisture <- ggarrange(event1_moisture+rremove("xlab"), event2_moisture+rremo
                  )
 fig_final_moisture <- annotate_figure(fig_moisture, top = text_grob("Flux across events",size = 14, face = "bold", x = 0.4))
 
-ggsave(filename = "moisture_combined.jpg",
+#ggsave(filename = "moisture_combined.jpg",
        plot = fig_final_moisture,
        width = 270, # 14.1 x 5.05 in 358 x 256 mm 
        height = 195,# 
