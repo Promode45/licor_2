@@ -577,7 +577,7 @@ event4_cld <- emmeans(event4_gen, ~treatment:ftime) %>%
 ```
 Looks good, figure out how to add error bars, running into problems when doing that 
 ```{r}
-event4 |> 
+event4_finallp <- event4 |> 
   group_by(ftime, treatment) |> 
   summarise(mean_flux = mean(flux, na.rm = T)) |> 
 ggplot(aes(ftime, mean_flux, color = treatment))+
@@ -586,7 +586,7 @@ ggplot(aes(ftime, mean_flux, color = treatment))+
   geom_label(data = event4_cld,
     aes(x = ftime, y = emmean, label = letter ), fill = "white", size = 3,position = position_dodge(width = 0.5))+
   labs(x = "Days after rain",
-       y = "Flux", 
+       y = "Flux (μmol/m2-s)", 
        title = "Drying cycle 4")+
   scale_x_discrete(labels = c("1","2","3","5"))+
   scale_fill_viridis_d()+
@@ -635,7 +635,7 @@ event3_cld <- emmeans(event3_exp, ~treatment|ftime) %>%
 ```
 
 ```{r}
-event3 |> 
+event3_finallp <- event3 |> 
   group_by(ftime, treatment) |> 
   summarise(mean_flux = mean(flux, na.rm = T)) |> 
 ggplot(aes(ftime, mean_flux, color = treatment))+
@@ -644,7 +644,7 @@ ggplot(aes(ftime, mean_flux, color = treatment))+
   geom_label(data = event3_cld,
     aes(x = ftime, y = emmean, label = letter ), fill = "white", size = 3,position = position_dodge(width = 0.4))+
   labs(x = "Days after rain",
-       y = "Flux", 
+       y = "Flux (μmol/m2-s)", 
        title = "Drying cycle 3")+
   scale_x_discrete(labels = c("1","3","6"))+
   scale_fill_viridis_d()+
@@ -694,7 +694,7 @@ event2_cld <- emmeans(event2_exp, ~treatment|ftime) %>%
 ```
 
 ```{r}
-event2 |> 
+event2_finallp <- event2 |> 
   group_by(ftime, treatment) |> 
   summarise(mean_flux = mean(flux, na.rm = T)) |> 
 ggplot(aes(ftime, mean_flux, color = treatment))+
@@ -703,7 +703,7 @@ ggplot(aes(ftime, mean_flux, color = treatment))+
   geom_label(data = event2_cld,
     aes(x = ftime, y = emmean, label = letter ), fill = "white", size = 3,position = position_dodge(width = 0.5))+
   labs(x = "Days after rain",
-       y = "Flux", 
+       y = "Flux (μmol/m2-s)", 
        title = "Drying cycle 2")+
   scale_x_discrete(labels = c("1","2","3"))+
   scale_fill_viridis_d()+
@@ -751,7 +751,7 @@ event1_cld <- emmeans(event1_gen, ~treatment|ftime) %>%
 ```
 
 ```{r}
-event1 |> 
+event1_finallp <- event1 |> 
   group_by(ftime, treatment) |> 
   summarise(mean_flux = mean(flux, na.rm = T)) |> 
 ggplot(aes(ftime, mean_flux, color = treatment))+
@@ -760,12 +760,169 @@ ggplot(aes(ftime, mean_flux, color = treatment))+
   geom_label(data = event1_cld,
     aes(x = ftime, y = emmean, label = letter ), fill = "white", size = 3,position = position_dodge(width = 0.5))+
   labs(x = "Days after rain",
-       y = "Flux", 
-       title = "Drying cycle 2")+
+       y = "Flux (μmol/m2-s)", 
+       title = "Drying cycle 1")+
   scale_x_discrete(labels = c("1","2","3"))+
   scale_fill_viridis_d()+
   theme_grey()
 ```
+
+```{r}
+#resp_final |> 
+  #filter(!drying_cycle == 0) |> 
+  ggplot(transform(resp_final,swc1 = cut(swc, seq(0,1,0.1))),
+         aes(treatment,flux))+
+  geom_jitter(aes(color = treatment))+
+  facet_wrap(~swc1)
+
+resp_final |> 
+  filter(!drying_cycle == 0) |> 
+  ggplot(aes(swc,flux))+
+  geom_point(aes(color = treatment))+
+  geom_smooth(aes(color = treatment),se = F, method = "lm")+
+  facet_wrap(~drying_cycle)
+```
+
+```{r fig.width=10, fig.height= 8}
+final_lp <- ggarrange(event1_finallp+rremove("xlab"), event2_finallp+rremove("xlab")+rremove("ylab"), event3_finallp,event4_finallp+rremove("ylab"),
+                 labels = NA,
+                 label.y = 1,
+                 ncol = 2, nrow = 2,
+                 common.legend = T,
+                 label.x = 0.5,
+                 legend = "right"
+                 
+                 )
+fig_final_lp <- annotate_figure(final_lp, top = text_grob("Flux across events",size = 14, face = "bold", x = 0.4))
+#ggsave(filename = "final_lp.jpg",
+       plot = fig_final_lp,
+       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+       height = 195,# 
+       units = "mm",
+       dpi = 200,
+       device = "bmp"
+)
+```
+
+
+```{r}
+trt_1 <- resp_final |> 
+  filter(treatment == "NPK") |> 
+  filter(!drying_cycle == 0 & !drying_cycle == 4) |> 
+  filter(!drying_cycle == 3 | !drying_cycle ==4 & !time_of_day == "pm") |> 
+  summarise(mean_flux = mean(flux),
+            sd_flux = sd(flux),
+            .by = time,treatment,drying_cycle,dar) |> 
+  ungroup() |> 
+  ggplot(aes(dar,mean_flux))+
+  geom_point(aes(color = drying_cycle), position = position_dodge(0.5))+
+  geom_errorbar(aes(ymin = mean_flux -sd_flux , ymax = mean_flux +sd_flux, color = drying_cycle), width = 0.2, position = position_dodge(0.5))+
+ scale_y_continuous(breaks = seq(0.3,1.8,by=0.2),
+                     limits = c(0.3,1.8)
+                     )+
+  labs(title = "NPK")+
+  theme(panel.grid.minor.y = element_blank())
+  
+```
+
+```{r}
+trt_2 <- resp_final |> 
+  filter(treatment == "NPK+Disturbance") |> 
+  filter(!drying_cycle == 0 & !drying_cycle == 4) |> 
+  filter(!drying_cycle == 3 | !drying_cycle ==4 & !time_of_day == "pm") |> 
+  summarise(mean_flux = mean(flux),
+            sd_flux = sd(flux),
+            .by = time,treatment,drying_cycle,dar) |> 
+  ungroup() |> 
+  ggplot(aes(dar,mean_flux))+
+  geom_point(aes(color = drying_cycle), position = position_dodge(0.5))+
+  geom_errorbar(aes(ymin = mean_flux -sd_flux , ymax = mean_flux +sd_flux, color = drying_cycle), width = 0.2, position = position_dodge(0.5))+
+  scale_y_continuous(breaks = seq(0.3,1.8,by=0.2),
+                     limits = c(0.3,1.8)
+                     )+
+  labs(title = "NPK+Disturbance")+
+  theme(panel.grid.minor.y = element_blank())
+```
+
+```{r}
+trt_3 <- resp_final |> 
+  filter(treatment == "Disturbance") |> 
+  filter(!drying_cycle == 0 & !drying_cycle == 4) |> 
+  filter(!drying_cycle == 3 | !drying_cycle ==4 & !time_of_day == "pm") |> 
+  summarise(mean_flux = mean(flux),
+            sd_flux = sd(flux),
+            .by = time,drying_cycle,dar) |> 
+  ungroup() |> 
+  ggplot(aes(dar,mean_flux))+
+  geom_point(aes(color = drying_cycle), position = position_dodge(0.5))+
+  geom_errorbar(aes(ymin = mean_flux -sd_flux , ymax = mean_flux +sd_flux, color = drying_cycle), width = 0.2, position = position_dodge(0.5))+
+  scale_y_continuous(breaks = seq(0.3,1.8,by=0.2),
+                     limits = c(0.3,1.8)
+                     )+
+  labs(title = "Disturbance")+
+  theme(panel.grid.minor.y = element_blank())
+```
+
+```{r}
+trt_4 <- resp_final |> 
+  filter(treatment == "Control") |> 
+  filter(!drying_cycle == 0 & !drying_cycle == 4) |> 
+  filter(!drying_cycle == 3 | !drying_cycle ==4 & !time_of_day == "pm") |> 
+  summarise(mean_flux = mean(flux),
+            sd_flux = sd(flux),
+            .by = time,drying_cycle,dar) |> 
+  ungroup() |> 
+  ggplot(aes(dar,mean_flux))+
+  geom_point(aes(color = drying_cycle), position = position_dodge(0.5))+
+  geom_errorbar(aes(ymin = mean_flux -sd_flux , ymax = mean_flux +sd_flux, color = drying_cycle), width = 0.2, position = position_dodge(0.5))+
+  scale_y_continuous(breaks = seq(0.3,1.8,by=0.2),
+                     limits = c(0.3,1.8)
+                     )+
+  labs(title = "Control")
+  theme(panel.grid.minor.y = element_blank())
+```
+
+```{r fig.width=6, fig.height=5}
+library(grid)
+trt_wise <- ggarrange(trt_1+rremove("xlab")+rremove("ylab"), trt_2+rremove("xlab")+rremove("ylab"), trt_3+rremove("ylab")+rremove("xlab"),trt_4+rremove("xlab")+rremove("ylab"),
+                 labels = NA,
+                 label.y = 1,
+                 ncol = 2, nrow = 2,
+                 common.legend = T,
+                 label.x = 0.5,
+                 legend = "right",
+                 align = "hv"
+                 
+                 
+)
+trt_wise_annotated <- annotate_figure(trt_wise, left = textGrob("Mean flux (μmol/m2-s)", rot = 90, gp = gpar(cex = 1.3)),
+                top = textGrob("Trends in flux", gp = gpar(cex = 1.3)),
+                    bottom = textGrob("Days after rain", gp = gpar(cex = 1.3)))
+#ggsave(filename = "trt_wise.jpg",
+       plot = trt_wise_annotated,
+       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+       height = 195,# 
+       units = "mm",
+       dpi = 200,
+       device = "bmp"
+)
+                 
+```
+
+```{r }
+resp_final |> 
+  filter(!drying_cycle == 0 & !drying_cycle == 4) |> 
+  filter(!drying_cycle == 3 | !drying_cycle ==4 & !time_of_day == "pm") |> 
+  summarise(mean_flux = mean(flux),
+            sd_flux = sd(flux),
+            .by = time,treatment,drying_cycle,dar) |> 
+  ungroup() |> 
+  ggplot(aes(dar,mean_flux))+
+  geom_point(aes(color = drying_cycle), position = position_dodge(0.5))+
+  geom_errorbar(aes(ymin = mean_flux -sd_flux , ymax = mean_flux +sd_flux, color = drying_cycle), width = 0.2, position = position_dodge(0.5)) +
+  facet_wrap(~treatment)
+```
+
 
 Not being used anymore 
 
