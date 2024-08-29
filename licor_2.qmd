@@ -878,7 +878,7 @@ trt_4 <- resp_final |>
   scale_y_continuous(breaks = seq(0.3,1.8,by=0.2),
                      limits = c(0.3,1.8)
                      )+
-  labs(title = "Control")
+  labs(title = "Control")+
   theme(panel.grid.minor.y = element_blank())
 ```
 
@@ -898,7 +898,7 @@ trt_wise <- ggarrange(trt_1+rremove("xlab")+rremove("ylab"), trt_2+rremove("xlab
 trt_wise_annotated <- annotate_figure(trt_wise, left = textGrob("Mean flux (μmol/m2-s)", rot = 90, gp = gpar(cex = 1.3)),
                 top = textGrob("Trends in flux", gp = gpar(cex = 1.3)),
                     bottom = textGrob("Days after rain", gp = gpar(cex = 1.3)))
-#ggsave(filename = "trt_wise.jpg",
+ggsave(filename = "trt_wise.jpg",
        plot = trt_wise_annotated,
        width = 270, # 14.1 x 5.05 in 358 x 256 mm 
        height = 195,# 
@@ -908,6 +908,27 @@ trt_wise_annotated <- annotate_figure(trt_wise, left = textGrob("Mean flux (μmo
 )
                  
 ```
+
+```{r}
+dc4_trt_1 <- resp_final |> 
+  filter(treatment == "NPK") |> 
+  filter(drying_cycle == 4) |> 
+  filter(!time_of_day == "pm") |> 
+  summarise(mean_flux = mean(flux),
+            sd_flux = sd(flux),
+            .by = time,dar) |> 
+  ungroup() |> 
+  ggplot(aes(dar,mean_flux))+
+  geom_point(position = position_dodge(0.5))+
+  geom_errorbar(aes(ymin = mean_flux -sd_flux , ymax = mean_flux +sd_flux), width = 0.2, position = position_dodge(0.5))+
+  scale_y_continuous(breaks = seq(1.8,4.5,by=0.2),
+                     limits = c(1.8,4.5)
+                     )+
+  labs(title = "NPK")+
+  theme(panel.grid.minor.y = element_blank())
+```
+
+
 
 ```{r }
 resp_final |> 
@@ -922,7 +943,40 @@ resp_final |>
   geom_errorbar(aes(ymin = mean_flux -sd_flux , ymax = mean_flux +sd_flux, color = drying_cycle), width = 0.2, position = position_dodge(0.5)) +
   facet_wrap(~treatment)
 ```
+GLMM
+```{r}
+event_4_removed <- resp_final |> 
+  filter(!drying_cycle == 4)
+#devtools::install_github("dustinfife/flexplot")
+require(flexplot)
+baseline <- lmer(flux~1 + (1|label), data = resp_final)
+summary(baseline)
+one_variable_fixed <- lmer(flux~ 1+treatment+(1|label),data = resp_final)
+summary(one_variable_fixed)
+two_variable_fixed <- lmer(flux ~ treatment+swc + (1|label), data = event_4_removed)
+summary(two_variable_fixed)
+two_variable_random <- lmer(flux~treatment+swc+(1+swc|label), data = event_4_removed)
+summary(two_variable_random)
 
+visualize(two_variable_random,
+          formula = flux~ treatment, sample = 25)
+compare.fits(flux ~ swc | treatment + label,
+             data = resp_final,
+             model1 = two_variable_fixed,
+             model2 = two_variable_random,
+             re = T, 
+             clusters = 5)
+visualize(two_variable_fixed, plot = "residuals")
+```
+modelling swc as a fixed effects seems to be doing better, we will proceed with that 
+
+```{r}
+resp_data_finalw |> 
+  ggplot(aes(swc,ts, fill = fco2_dry, width = .7))+
+  geom_tile()+
+  scale_fill_gradient(low = "white", high = "blue")+
+  theme_minimal()
+```
 
 Not being used anymore 
 
