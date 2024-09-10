@@ -130,6 +130,8 @@ resp_data_w <- resp_data_w %>%
   mutate(time_of_day = if_else(am(date_time),"am","pm")) |> 
   mutate(ftime = factor(time)) |> 
   filter(!swc < 0.01)
+
+table(resp_data_w[,c("label","treatment")])
 #write.csv(resp_data_w, "Data/licor_wrangled.csv")
 ```
 At each plot, three measurements were made. In some plots, one of the three readings seemed to be off due to instrument problems, these were corrected using the IQR method. values beyond the bounds were converted to the mean of the three readings. 
@@ -146,7 +148,8 @@ resp_data_w <- resp_data_w |>
   mutate(swc = case_when(swc < lower_bound ~ mean,
                          swc > upper_bound ~ upper_bound,
                          .default = swc
-                         )) 
+ )) 
+cor(resp_data_w$swc,resp_data_w$ts)
 ```
 
 
@@ -162,12 +165,6 @@ leveneTest(flux~treatment, data = resp_data_w)
 ```
 Cannot reject null-hypotheses, therefore we can say that the variances are same for the groups. We move forward with a parametric test (anova)
 
-```{r}
-hist(resp_data_w$flux)
-qqPlot(final_dryingcycle$flux)
-resp_data_w |> 
-  filter(swc < 0.1)
-```
 
 ```{r}
 resp_data_w |> 
@@ -504,14 +501,6 @@ fig_moisture <- ggarrange(event1_moisture+rremove("xlab"), event2_moisture+rremo
                  )
 fig_final_moisture <- annotate_figure(fig_moisture, top = text_grob("Flux across events",size = 14, face = "bold", x = 0.4))
 
-#ggsave(filename = "moisture_combined.jpg",
-       plot = fig_final_moisture,
-       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
-       height = 195,# 
-       units = "mm",
-       dpi = 200,
-       device = "bmp"
-)
 ```
 
 
@@ -519,7 +508,7 @@ fig_final_moisture <- annotate_figure(fig_moisture, top = text_grob("Flux across
 
 ```{r}
 set.seed(123)
-install.packages("rstantools")
+#install.packages("rstantools")
 
 ggbetweenstats(
   data = resp_final,
@@ -953,9 +942,9 @@ baseline <- lmer(flux~1 + (1|label), data = resp_final)
 summary(baseline)
 one_variable_fixed <- lmer(flux~ 1+treatment+(1|label),data = resp_final)
 summary(one_variable_fixed)
-two_variable_fixed <- lmer(flux ~ treatment+swc + (1|label), data = event_4_removed)
+two_variable_fixed <- lmer(flux ~ treatment+swc + (1|label), data = resp_final)
 summary(two_variable_fixed)
-two_variable_random <- lmer(flux~treatment+swc+(1+swc|label), data = event_4_removed)
+two_variable_random <- lmer(flux~treatment+swc+(1+swc|label), data = resp_final)
 summary(two_variable_random)
 
 visualize(two_variable_random,
@@ -969,6 +958,76 @@ compare.fits(flux ~ swc | treatment + label,
 visualize(two_variable_fixed, plot = "residuals")
 ```
 modelling swc as a fixed effects seems to be doing better, we will proceed with that 
+
+```{r}
+three_variable_fixed <- lmer(flux ~ treatment+swc+ts + (1|label), data = resp_final)
+Anova(three_variable_fixed,type = 3)
+three_variable_fixed_inter <- lmer(flux ~ treatment*swc*ts + (1|label), data = resp_final)
+summary(three_variable_fixed_inter)
+Anova(three_variable_fixed_inter, type = 3)
+three_variable_random <- lmer(flux~treatment+swc+ts+(1+ts+swc|label), data = resp_final)
+summary(three_variable_random)
+three_variable_4removed <- lmer(flux~treatment+swc+ts+(1+swc+ts|label), data = event_4_removed)
+summary(three_variable_4removed)
+model.comparison(three_variable_fixed, test_model)
+test_model <- lmer(flux~treatment*swc*ts+(1|label)+(1|ftime), data = resp_final)
+summary(test_model)
+
+```
+three variable fixed seems to be doing the best!!
+
+```{r}
+visualize(three_variable_fixed,
+          formula = flux~treatment|swc,
+          sample = 25,
+          plot = "model")
+summary(three_variable_fixed)
+estimates(three_variable_fixed)
+Anova(three_variable_fixed,type = 3)
+```
+```{r}
+visualize(three_variable_random,
+          formula = flux~swc|treatment,
+          sample = 25)
+```
+
+Seasons - 
+```{r}
+dormant <- resp_final |> 
+  filter(drying_cycle == 1 | drying_cycle == 2 )
+growing <- resp_final |> 
+  filter( drying_cycle == 3 |drying_cycle == 4)
+```
+
+GLMM - season wise
+```{r}
+three_variable_fixed_dormant <- lmer(flux ~ treatment+swc+ts + (1|label), data = dormant)
+visualize(three_variable_fixed_dormant,
+          formula = flux~ swc|treatment+ts,
+          sample = 25)
+#Anova(three_variable_fixed_dormant, type = 3)
+
+```
+
+```{r}
+three_variable_fixed_growing <- lmer(flux ~ treatment+swc+ts + (1|label), data = growing)
+visualize(three_variable_fixed_growing,
+          formula = flux~ swc|treatment,
+          sample = 25)
+Anova(three_variable_fixed_growing, type = 3)
+```
+
+```{r}
+library(lattice)
+library(patchwork)
+sjPlot::plot_model(three_variable_fixed)
+sjPlot::tab_model(three_variable_fixed)
+model_coefs <- coef(three_variable_fixed)$label
+```
+
+```{r}
+dd_glmm <- drop1(three_variable_fixed)
+```
 
 ```{r}
 resp_data_finalw |> 

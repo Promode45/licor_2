@@ -1,0 +1,225 @@
+---
+title: "glmm"
+format: html
+editor: visual
+---
+
+```{r}
+#|echo: false
+library(tidyverse)
+library(janitor)
+library(readr)
+library(rstatix)
+#install.packages("FSA")
+library(FSA)
+#install.packages("rcompanion")
+library(rcompanion)
+#install.packages("plotly")
+library(plotly)
+#install.packages("ggpubr")
+library(ggpubr)
+#install.packages("reshape")
+library(reshape)
+#install.packages("sciplot")
+library(sciplot)
+#install.packages("nlme")
+library(nlme)
+library(lme4)
+library(emmeans)
+library(broom)
+library(multcomp)
+library(car)
+
+```
+
+```{r}
+#| echo: false
+resp_data <- list.files(path = "/Users/pramodhegde/Library/CloudStorage/OneDrive-UniversityofGeorgia/Documents/Licor",
+                        pattern = "*.csv",
+                        full.names = T) %>% 
+  lapply(read.csv, skip =3, header = F) %>% 
+  bind_rows 
+colnames(resp_data) <- c("co2", "date_time", "label", "swc", "flux", "ts", "ta")
+resp_data_w <- resp_data %>% 
+  na.omit() |> 
+  filter(label != "Test")
+```
+
+```{r}
+resp_data_w <- resp_data_w %>% 
+  clean_names() %>% 
+  mutate(date_time = as.POSIXct(date_time, tz = Sys.timezone(), format="%Y/%m/%d %H:%M:%S")) %>% 
+  mutate(label = factor(label)) %>% 
+  mutate(day = day(date_time)) %>% 
+  mutate(month = month(date_time)) %>% 
+  mutate(treatment = case_when( label %in% c(1,8,12,20,23) ~ "Disturbance",
+                                label %in% c(3,10,14,17,24,2,9,11,19,25) ~ "NPK",
+                                label %in% c(4,7,15,16,22) ~ "Control", 
+                                label %in% c(5,6,13,18,21) ~ "NPK+Disturbance",
+                                .default = "Outside_treatments"
+    )) |> 
+  mutate( drying_cycle = case_when( day ==29 & month == 01 ~ "1",
+                                    day == 30 & month == 01 ~"1" ,
+                                    day == 31 & month == 01 ~ "1", 
+                                    day == 05 ~ "2", 
+                                    day == 06 ~ "2", 
+                                    day == 07 ~ "2",
+                                    day == 27 & month == 03 ~ "3",
+                                    day== 28 & month == 03 ~ "3",
+                                    day == 29 & month == 03 ~ "3",
+                                    day == 01 & month == 04 ~ "3", 
+                                    month == 7 ~ "4", 
+                                    month == 8 ~ "4",
+                                    .default = "0"
+                                    
+    
+    
+    
+  )) |> 
+  mutate(dar = case_when(
+    day ==29 & month == 01 ~ "1",
+    day == 30 & month == 01 ~"2" ,
+    day == 31 & month == 01 ~ "3",
+    day == 05 ~ "1",
+    day == 06 ~ "2",
+    day == 07 ~ "3",
+    day == 27 & month == 03 ~ "1",
+     day== 28 & month == 03 ~ "2",
+    day == 29 & month == 03 ~ "3",
+    day == 01 & month == 04 ~ "6",
+    day == 30 & month == 07 ~ "1",
+     day == 31 & month == 07 ~ "2",
+    day == 01 & month == 08 ~ "3",
+    day == 02 & month == 08 ~ "4",
+    .default = "0"
+    
+    
+  )
+           
+           ) |> 
+   mutate(
+    rep = case_when
+    (label %in% c(1:5) ~ "1",
+    label %in%  c(6:10) ~ "2",
+      label %in%  c(11:15) ~ "3",
+      label %in%  c(16:20) ~ "4", 
+      label %in%  c(21:25) ~ "5",
+      .default = "None"
+     )
+  ) |> 
+  mutate(fdar = factor(dar),
+         treatment = factor(treatment),
+         label = factor(label),
+         rep = factor(rep)) |> 
+  filter(!treatment == "Outside_treatments") |> 
+  mutate(time = yday(date_time) - 28) |> 
+  mutate(time_of_day = if_else(am(date_time),"am","pm")) |> 
+  mutate(ftime = factor(time)) |> 
+  filter(!swc < 0.01)
+
+
+```
+
+```{r}
+resp_final <-
+  resp_data_w |> 
+  summarise(flux = mean(flux),
+            swc = mean(swc),
+            ts = mean(ts),
+            ta = mean(ta),
+            date_time = mean(date_time),
+            .by = c("label","day","month","time_of_day","treatment","drying_cycle","ftime","time","rep","dar","fdar")) |> 
+    ungroup() 
+
+resp_final_pm <- resp_final |> 
+  filter(!drying_cycle == 3 | !drying_cycle ==4 & !time_of_day == "pm")
+```
+
+```{r}
+event_4_removed <- resp_final |> 
+  filter(!drying_cycle == 4)
+#devtools::install_github("dustinfife/flexplot")
+require(flexplot)
+baseline <- lmer(flux~1 + (1|label), data = resp_final)
+summary(baseline)
+one_variable_fixed <- lmer(flux~ 1+treatment+(1|label),data = resp_final)
+summary(one_variable_fixed)
+two_variable_fixed <- lmer(flux ~ treatment+swc + (1|label), data = resp_final)
+summary(two_variable_fixed)
+two_variable_random <- lmer(flux~treatment+swc+(1+swc|label), data = resp_final)
+summary(two_variable_random)
+
+visualize(two_variable_random,
+          formula = flux~ treatment, sample = 25)
+compare.fits(flux ~ swc | treatment + label,
+             data = resp_final,
+             model1 = two_variable_fixed,
+             model2 = two_variable_random,
+             re = T, 
+             clusters = 5)
+visualize(two_variable_fixed, plot = "residuals")
+```
+
+```{r}
+three_variable_fixed <- lmer(flux ~ treatment+swc+ts + (1|label)+(1|ftime), data = resp_final_pm)
+Anova(three_variable_fixed,type = 3)
+three_variable_fixed_inter <- lmer(flux ~ treatment*swc*ts + (1|label), data = resp_final)
+summary(three_variable_fixed_inter)
+Anova(three_variable_fixed_inter, type = 3)
+three_variable_random <- lmer(flux~treatment+swc+ts+(1+ts+swc|label), data = resp_final)
+summary(three_variable_random)
+three_variable_4removed <- lmer(flux~treatment+swc+ts+(1+swc+ts|label), data = event_4_removed)
+summary(three_variable_4removed)
+
+test_model <- lmer(flux~treatment*swc*ts+(1|label)+(1|ftime), data = resp_final_pm)
+summary(test_model)
+visualize(test_model,
+          formula = flux ~ swc|ftime,
+          sample = 15)
+model.comparison(three_variable_fixed, test_model)
+```
+
+three variable fixed seems to be doing the best!!
+
+```{r}
+visualize(three_variable_fixed,
+          formula = flux~treatment|swc+ts,
+          sample = 25)
+summary(three_variable_fixed)
+estimates(three_variable_fixed)
+Anova(three_variable_fixed,type = 3)
+```
+
+
+Season-wise GLMM
+```{r}
+dormant <- resp_final_pm |> 
+  filter(drying_cycle == 1 | drying_cycle == 2 )
+growing <- resp_final_pm |> 
+  filter( drying_cycle == 3 |drying_cycle == 4)
+```
+
+```{r}
+three_variable_fixed_dormant <- lmer(flux ~ treatment+swc+ts + (1|label)+(1|ftime), data = dormant)
+visualize(three_variable_fixed_dormant,
+          formula = flux~ swc|treatment+ts,
+          sample = 25)
+
+```
+
+```{r}
+three_variable_fixed_growing <- lmer(flux ~ treatment+swc+ts + (1|label)+(1|ftime), data = growing)
+visualize(three_variable_fixed_growing,
+          formula = flux~ts,
+          sample = 25)
+
+Anova(three_variable_fixed_growing, type = 3)
+```
+
+```{r}
+#install.packages("prettyglm")
+library(prettyglm)
+
+pretty_coefficients(three_growing_random)
+```
+
