@@ -1,0 +1,68 @@
+---
+title: "new_data"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(hms)
+library(janitor)
+
+new_data <- read_excel("../Data/Abney_data.xlsx") |> 
+  clean_names()
+
+clean_data <- new_data |> 
+  filter(!if_all(everything(),is.na)) |> 
+  dplyr::select(c("label","rep","time","flux","swc","ts","date","treatment")) 
+
+
+# converting time column so that it has just the time, and merging that into the date column to create a datetime column
+clean_data$datetime <- clean_data$date+(clean_data$time - as.POSIXct(trunc(clean_data$time, units = "days")))
+clean_data <- clean_data |> 
+  dplyr::select(!time) |> 
+  mutate(day = day(datetime),
+         month = (month(datetime)),
+         time = as_hms(datetime),
+         label = factor(label),
+  ) |> 
+  mutate(treatment = case_when( label %in% c(1,8,12,20,23) ~ "Disturbance",
+                                label %in% c(3,10,14,17,24,2,9,11,19,25) ~ "NPK",
+                                label %in% c(4,7,15,16,22) ~ "Control", 
+                                label %in% c(5,6,13,18,21) ~ "NPK+Disturbance",
+                                .default = "Outside_treatments"
+    )) 
+new_final <-
+  clean_data |> 
+  group_by(label,date,treatment) |> 
+  summarise(flux = mean(flux, na.rm = T),
+            swc = mean(swc, na.rm = T),
+            ts = mean(ts, na.rm = T),
+            datetime = mean(datetime, na.rm = T),
+            .groups = "drop"
+            ) |> 
+  ungroup() 
+clean_data |> 
+  filter(flux>10)
+
+combined_resp_data <- new_final |>
+  mutate(date_time = datetime) |> 
+  dplyr::select(-c(date,datetime)) |> 
+  rbind(resp_final_comb) 
+
+#write_csv(combined_resp_data,"../Data/combined.csv")
+
+```
+
+```{r}
+new_final$date <- factor(format(new_final$date, format = "%m-%d"))
+new_final |> 
+  group_by(date,treatment) |> 
+  summarise(mean_flux = mean(flux, na.rm = T)) |> 
+  ggplot(aes(date, mean_flux, group = treatment, color = treatment))+
+  geom_line()+
+  geom_point()+
+    theme(axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))
+```
+

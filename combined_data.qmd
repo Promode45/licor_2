@@ -1,0 +1,46 @@
+---
+title: "combined"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+combined_resp_data |> 
+ summary()
+```
+
+```{r}
+combined_resp_data |> 
+  filter(flux<10) |> 
+  ggplot(aes(ts,flux))+
+  geom_point(aes(color = treatment))+
+stat_regline_equation(
+    aes(label = paste(after_stat(eq.label), ..rr.label.., sep = "~~~~"), color = treatment))
+```
+```{r fig.width= 8, fig.height=4}
+combined_resp_data |> 
+  mutate(year = year(date_time))
+
+combined_resp_data |> 
+  mutate(date = date(date_time)) |> 
+  group_by(date,treatment) |> 
+  summarise(mean_flux = mean(flux, na.rm = T)) |> 
+  ggplot(aes(date, mean_flux, group = treatment, color = treatment))+
+  geom_line(aes(color = treatment))+
+  geom_point()+
+  scale_x_date(date_breaks = "2 months", date_labels = "%b %Y") 
+```
+
+
+
+
+GLMM on the combined data
+```{r}
+lmm1<- lmer(flux ~ treatment+swc+ts + (1|label), data = combined_resp_data)
+summary(lmm1)
+```
+

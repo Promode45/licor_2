@@ -182,9 +182,21 @@ model.comparison(three_variable_fixed, test_model)
 three variable fixed seems to be doing the best!!
 
 ```{r}
-visualize(three_variable_fixed,
+glmm <- visualize(three_variable_fixed,
           formula = flux~treatment|swc+ts,
-          sample = 25)
+          sample = 25,
+          plot = "model",
+          xlab("Soil temperature"))
+glmm_final <- glmm +
+  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))
+#ggsave(filename = "glmm.jpg",
+       plot = glmm_final,
+       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+       height = 195,# 
+       units = "mm",
+       dpi = 200,
+       device = "bmp"
+)
 summary(three_variable_fixed)
 estimates(three_variable_fixed)
 Anova(three_variable_fixed,type = 3)
@@ -199,19 +211,41 @@ growing <- resp_final_pm |>
   filter( drying_cycle == 3 |drying_cycle == 4)
 ```
 
-```{r}
+```{r fig.width= 8, fig.height= 5}
 three_variable_fixed_dormant <- lmer(flux ~ treatment+swc+ts + (1|label)+(1|ftime), data = dormant)
-visualize(three_variable_fixed_dormant,
-          formula = flux~ swc|treatment+ts,
-          sample = 25)
+glmm_dormant <- visualize(three_variable_fixed_dormant,
+          formula = flux~ treatment|swc+ts,
+          sample = 25,
+          plot = "model")
+glmm_dormant_final <- glmm_dormant +
+  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))
+#ggsave(filename = "glmm_dormant.jpg",
+       plot = glmm_dormant_final,
+       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+       height = 195,# 
+       units = "mm",
+       dpi = 200,
+       device = "bmp"
+)
 
 ```
 
 ```{r}
 three_variable_fixed_growing <- lmer(flux ~ treatment+swc+ts + (1|label)+(1|ftime), data = growing)
-visualize(three_variable_fixed_growing,
-          formula = flux~ts,
-          sample = 25)
+glmm_growing <- visualize(three_variable_fixed_growing,
+          formula = flux~treatment|swc+ts,
+          sample = 25,
+          plot = "model")
+glmm_growing_final <- glmm_growing+
+  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))
+#ggsave(filename = "glmm_growing.jpg",
+       plot = glmm_growing_final,
+       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+       height = 195,# 
+       units = "mm",
+       dpi = 200,
+       device = "bmp"
+)
 
 Anova(three_variable_fixed_growing, type = 3)
 ```
@@ -220,6 +254,5 @@ Anova(three_variable_fixed_growing, type = 3)
 #install.packages("prettyglm")
 library(prettyglm)
 
-pretty_coefficients(three_growing_random)
 ```
 

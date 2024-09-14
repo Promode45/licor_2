@@ -128,12 +128,17 @@ resp_data_w <- resp_data_w %>%
   filter(!treatment == "Outside_treatments") |> 
   mutate(time = yday(date_time) - 28) |> 
   mutate(time_of_day = if_else(am(date_time),"am","pm")) |> 
-  mutate(ftime = factor(time)) |> 
-  filter(!swc < 0.01)
+  mutate(ftime = factor(time)) 
 
 table(resp_data_w[,c("label","treatment")])
 #write.csv(resp_data_w, "Data/licor_wrangled.csv")
 ```
+```{r}
+resp <- resp_data_w |> 
+  dplyr::select(-c(co2,drying_cycle,dar,rep,fdar,time, time_of_day,ftime,iqr,lower_bound,upper_bound,mean, ta, day,month))
+```
+
+
 At each plot, three measurements were made. In some plots, one of the three readings seemed to be off due to instrument problems, these were corrected using the IQR method. values beyond the bounds were converted to the mean of the three readings. 
 
 ```{r}
@@ -188,6 +193,9 @@ resp_final <-
 
 resp_final
 #write.csv(resp_final, "Data/licor_aggregated.csv")
+
+resp_final_comb <- resp_final |> 
+  dplyr::select(-c(day,month, time,time_of_day,drying_cycle,ftime,rep,dar,fdar,ta))
 ```
  
  
