@@ -10,37 +10,160 @@ library(tidyverse)
 
 ```{r}
 combined_resp_data |> 
- summary()
+ arrange(label)
+```
+
+```{r}
+combined_resp_data <- combined_resp_data |> 
+  mutate(year = year(date_time)) |> 
+  mutate(yday = yday(date_time)) |> 
+  arrange(label,date_time) |> 
+  mutate(time = case_when(year == 2023 ~ yday(date_time) - 156, 
+                          year == 2024 ~ yday(date_time)- 28 + 90+119)) |> 
+  mutate(treatment = factor(treatment)) |> 
+  mutate(ftime = factor(time))
 ```
 
 ```{r}
 combined_resp_data |> 
-  filter(flux<10) |> 
   ggplot(aes(ts,flux))+
-  geom_point(aes(color = treatment))+
+  geom_point(aes(color = treatment, shape = treatment))+
+  stat_smooth(method = "lm", aes(color = treatment), se = F, show.legend = F)+
 stat_regline_equation(
-    aes(label = paste(after_stat(eq.label), ..rr.label.., sep = "~~~~"), color = treatment))
+    aes(label = paste(after_stat(eq.label), after_stat(rr.label), sep = "~~~~"), color = treatment), show.legend = F)+
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 12),
+  strip.text = element_text(size = 10),  # Facet label text
+  legend.text = element_text(size = 12),
+  legend.title = element_text(size = 14),
+  plot.title = element_text(size = 14, face = "bold"))+
+  guides(color = guide_legend(title = "Treatment"),
+         shape = guide_legend(title = "Treatment"))+
+  labs(x = "Soil temperature (°C)",
+       y = "Mean flux (μmol/m2-s)",
+       title = "Flux vs. temperature")
+#ggsave(filename = "tempvsflux.jpg",
+       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+       height = 195,# 
+       units = "mm",
+       dpi = 200,
+       device = "bmp"
+)
 ```
 ```{r fig.width= 8, fig.height=4}
 combined_resp_data |> 
   mutate(year = year(date_time))
 
 combined_resp_data |> 
-  mutate(date = date(date_time)) |> 
+  mutate(date = date(date_time),
+         year = year(date_time)) |> 
   group_by(date,treatment) |> 
   summarise(mean_flux = mean(flux, na.rm = T)) |> 
   ggplot(aes(date, mean_flux, group = treatment, color = treatment))+
   geom_line(aes(color = treatment))+
   geom_point()+
-  scale_x_date(date_breaks = "2 months", date_labels = "%b %Y") 
+  scale_x_date(breaks = waiver(), date_labels = "%b %Y")
+```
+
+```{r}
+library(zoo)
+#install.packages("xts")
+library(xts)
+resp_zoo <- zoo(combined_resp_data$flux, order.by = combined_resp_data$date_time)
+resp_xts <- xts(x = combined_resp_data[3:5],
+                order.by = combined_resp_data$date_time)
+print(resp_xts)
+resp_xts_m <- to.monthly(resp_xts$flux)
+resp_xts_d <- to.daily(resp_xts$flux)
+monthly_avg <- apply.monthly(resp_xts, colMeans, na.rm = TRUE)
+plot(resp_xts_m, 
+     col = c("blue", "green", "red","purple"),  # Colors for the lines
+     lwd = 2,  # Line width
+     main = "Time Series Data", 
+     ylab = "Values", 
+     xlab = "Date")
+plot(resp_xts_m, col = c("red", "green", "blue", "purple"), grid.ticks.on = "days", major.ticks = "days", grid.col = "lightgrey")
+
+
 ```
 
 
+```{r}
+combined_resp_data |> 
+  ggplot(aes(treatment,flux))+
+  geom_boxplot()
+```
+
+```{r}
+combined_resp_data |> 
+  ggplot(aes(ts,flux))+
+  geom_point(aes(color = treatment, shape = treatment), size = 1.5, alpha = 1)+
+  geom_smooth(method = lm,se = T)+
+  theme(axis.text = element_text(size = 10),
+        axis.title = element_text(size = 10),
+  strip.text = element_text(size = 10),  # Facet label text
+  legend.text = element_text(size = 10),
+  legend.title = element_text(size = 12),
+  plot.title = element_text(size = 14, face = "bold"))+
+  theme_classic()+
+  labs(x = "Soil temperature (°C)",
+       y = "Mean Flux (μmol/m2-s)",
+       title = "Soil temperature vs. Flux")
+model <- lm(flux~ts, data = combined_resp_data)
+rsq <- summary(model)$r.squared
+pred <- predict(model)
+rmse <- rmse(combined_resp_data$flux, pred)
+nrmse_sd <- rmse/sd(combined_resp_data$flux)
+
+#ggsave(filename = "tempvsflux.jpg",
+       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+       height = 195,# 
+       units = "mm",
+       dpi = 200,
+       device = "bmp"
+)
+```
 
 
 GLMM on the combined data
 ```{r}
-lmm1<- lmer(flux ~ treatment+swc+ts + (1|label), data = combined_resp_data)
+lmm1<- lmer(flux ~ treatment+swc+ts + (1|label) +(1|ftime), data = combined_resp_data)
 summary(lmm1)
+library(flexplot)
+
+visualize(lmm1, 
+          formula = flux ~ treatment| swc+ts,
+          sample = 50) 
+```
+dataset combined with carbon data
+```{r}
+combined_withcar |> 
+  ggplot(aes(total_c_percent, total_n_percent))+
+  geom_point()
+```
+
+```{r}
+resp_normalized <- combined_withcar |> 
+  mutate(cn_ratio =  total_c_percent/total_n_percent) |> 
+  mutate(flux_normalised = flux/total_c_percent)
+```
+
+```{r}
+resp_normalized |> 
+  mutate(date = date(date_time),
+         year = year(date_time)) |> 
+  group_by(date,treatment) |> 
+  summarise(mean_flux_normalised = mean(flux_normalised, na.rm = T)) |> 
+  ggplot(aes(date, mean_flux_normalised, group = treatment, color = treatment))+
+  geom_line(aes(color = treatment))+
+  geom_point()+
+  scale_x_date(breaks = waiver(), date_labels = "%b %Y")
+```
+
+```{r}
+resp_normalized |> 
+  ggplot(aes(treatment,flux_normalised))+
+  geom_boxplot()+
+  facet_wrap(~month(date_time), scales = "free")
 ```
 

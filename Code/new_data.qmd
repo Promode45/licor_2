@@ -3,7 +3,7 @@ title: "new_data"
 format: html
 editor: visual
 ---
-
+Some time entries in this new dataset was in 12-hour format whereas the rest were in 24-hour format, making things complicated. Code on line 52 fixes this issue. Also, I think there were some issues with the timezone which has been taken care of in line 56 and 57 (update - lines 56,57 wern't really necessary.)
 ```{r}
 library(tidyverse)
 library(readxl)
@@ -46,10 +46,19 @@ new_final <-
 clean_data |> 
   filter(flux>10)
 
-combined_resp_data <- new_final |>
-  mutate(date_time = datetime) |> 
-  dplyr::select(-c(date,datetime)) |> 
+new_final <- new_final |>
+  rename(c("datetime"= "date_time"))|> 
+  dplyr::select(-date) 
+new_final <- new_final |> 
+  mutate(date_time = parse_date_time(date_time, 
+                                    orders = c("Ymd HMS", "Ymd I:MSp", "Ymd IMSp")))
+
+new_final1 <- new_final |> mutate(date_time = force_tz(date_time, "America/New_York"))
+resp_final_comb <- resp_final_comb |> mutate(date_time = force_tz(date_time, "America/New_York"))
+
+combined_resp_data <- new_final1 |> 
   rbind(resp_final_comb) 
+
 
 #write_csv(combined_resp_data,"../Data/combined.csv")
 
@@ -64,5 +73,22 @@ new_final |>
   geom_line()+
   geom_point()+
     theme(axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))
+```
+
+```{r}
+carbon_data <- read_csv("../Data/soil_carbon.csv") |> 
+  clean_names() |> 
+  dplyr::select(c(label,total_c_percent,total_n_percent,replicate, bulk_density, root_density))
+
+carbon_data <- carbon_data |> 
+  group_by(label,bulk_density,root_density) |> 
+  summarise(total_c_percent = mean(total_c_percent),
+            total_n_percent = mean(total_n_percent)) |> 
+  mutate(label = factor(label))
+```
+
+```{r}
+combined_withcar <- combined_resp_data |> 
+  left_join(carbon_data, by = "label")
 ```
 

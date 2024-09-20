@@ -206,15 +206,15 @@ Anova(three_variable_fixed,type = 3)
 Season-wise GLMM
 ```{r}
 dormant <- resp_final_pm |> 
-  filter(drying_cycle == 1 | drying_cycle == 2 )
+  filter(drying_cycle == 1 | drying_cycle == 2 ) 
 growing <- resp_final_pm |> 
-  filter( drying_cycle == 3 |drying_cycle == 4)
+  filter( drying_cycle == 3 |drying_cycle == 4) 
 ```
 
 ```{r fig.width= 8, fig.height= 5}
 three_variable_fixed_dormant <- lmer(flux ~ treatment+swc+ts + (1|label)+(1|ftime), data = dormant)
 glmm_dormant <- visualize(three_variable_fixed_dormant,
-          formula = flux~ treatment|swc+ts,
+          formula = flux~ swc,
           sample = 25,
           plot = "model")
 glmm_dormant_final <- glmm_dormant +
@@ -232,12 +232,28 @@ glmm_dormant_final <- glmm_dormant +
 
 ```{r}
 three_variable_fixed_growing <- lmer(flux ~ treatment+swc+ts + (1|label)+(1|ftime), data = growing)
+custom_labels <- c("swc"="Soil Water Content",
+                   "ts" = "Soil temperature",
+                   "treatment" = "Treatments")
+swc_labels <- c("low","medium","high")
+ts_labels <- c("7.4-20.4" = "Low Temp",
+  "20.4-28.7" = "Medium Temp",
+  "28.7-39.8" = "High Temp")
 glmm_growing <- visualize(three_variable_fixed_growing,
           formula = flux~treatment|swc+ts,
           sample = 25,
           plot = "model")
 glmm_growing_final <- glmm_growing+
-  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))
+  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+        axis.title = element_text(size = 10),
+  axis.text = element_text(size = 8),
+  strip.text = element_text(size = 10),  # Facet label text
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 12))+
+  labs(x = "Treatment",
+       y = "Flux (μmol/m2-s)",
+       facet = "Soil Water Content",
+       facet_row = "Soil Temperature")
 #ggsave(filename = "glmm_growing.jpg",
        plot = glmm_growing_final,
        width = 270, # 14.1 x 5.05 in 358 x 256 mm 
