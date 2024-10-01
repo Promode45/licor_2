@@ -1,0 +1,74 @@
+---
+title: "corr_plots"
+format: html
+editor: visual
+---
+
+```{r}
+#install.packages("corrplot")
+#install.packages("psych")
+library(corrplot)
+library(psych)
+corr_data <- resp_final[,12:14]
+m = cor(corr_data)
+corPlot(corr_data)
+
+```
+
+```{r}
+event4 |> 
+  ggplot(aes(x=swc,y=ts))+
+  geom_point(aes(color = flux))+
+  scale_fill_gradient(low = "white", high = "red")+
+  theme_minimal()+
+  coord_cartesian(expand = T)
+```
+
+```{r}
+#install.packages("akima")
+require(akima)
+resolution <- 0.05
+a <- interp(x = resp_final$swc,y = resp_final$ts, z= resp_final$flux,
+            xo=seq(min(resp_final$swc),max(resp_final$swc),by=resolution), 
+            yo=seq(min(resp_final$ts),max(resp_final$ts),by=resolution))
+image(a, xlab = "Moisture content", ylab = "Soil Temperature")
+res <- a$z |> 
+  magrittr::set_colnames(a$y)|>  
+  as_tibble() |> 
+  mutate(x=a$x)|> 
+  gather(y, z, -x, convert=TRUE)
+
+res |> 
+  ggplot(aes(x=x, y=y)) +
+  geom_tile(aes(fill=z))+
+  scale_fill_viridis_c(option = "plasma", name = "Flux")+
+  theme(panel.background = element_blank(),
+        plot.background = element_blank())+
+  theme_classic(base_size = 14)+
+  labs(x = "Soil Water Content",
+       y = "Soil Temperature",
+       fill = "FLux Flux (μmol/m2-s)",
+       title ="Heat map")
+ggsave(filename = "heatmap.jpg",
+       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+       height = 195,# 
+       units = "mm",
+       dpi = 200,
+       device = "bmp" 
+ )
+  
+```
+
+```{r}
+combined_withcar |> 
+  ggplot(aes(swc,flux))+
+  geom_point()+
+  geom_smooth(aes(color = treatment))
+```
+
+```{r}
+interaction.plot(x.factor =  resp_final$ts,
+                 trace.factor = resp_final$treatment,
+                 response = resp_final$flux)
+```
+

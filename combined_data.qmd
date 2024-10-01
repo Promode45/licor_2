@@ -6,11 +6,15 @@ editor: visual
 
 ```{r}
 library(tidyverse)
+library(flexplot)
 ```
 
 ```{r}
 combined_resp_data |> 
  arrange(label)
+
+combined_withcar <- combined_resp_data |> 
+  left_join(carbon_data, by = "label")
 ```
 
 ```{r}
@@ -42,6 +46,27 @@ stat_regline_equation(
   labs(x = "Soil temperature (°C)",
        y = "Mean flux (μmol/m2-s)",
        title = "Flux vs. temperature")
+
+combined_resp_data |> 
+  ggplot(aes(ts, flux)) +
+  geom_point(aes(color = treatment, shape = treatment)) +
+  stat_smooth(method = "nls", 
+              formula = y ~ a * exp(b * x), 
+              method.args = list(start = list(a = 1, b = 0.1)), 
+              aes(color = treatment), se = F, show.legend = F) +
+  stat_regline_equation(
+    aes(label = paste(after_stat(eq.label), after_stat(rr.label), sep = "~~~~"), color = treatment), show.legend = F) +
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        strip.text = element_text(size = 15),  # Facet label text
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 15),
+        plot.title = element_text(size = 15, face = "bold")) +
+  guides(color = guide_legend(title = "Treatment"),
+         shape = guide_legend(title = "Treatment")) +
+  labs(x = "Soil temperature (°C)",
+       y = "Mean flux (μmol/m2-s)",
+       title = "Flux vs. Temperature")
 #ggsave(filename = "tempvsflux.jpg",
        width = 270, # 14.1 x 5.05 in 358 x 256 mm 
        height = 195,# 
@@ -50,9 +75,38 @@ stat_regline_equation(
        device = "bmp"
 )
 ```
+
+
+
+
 ```{r fig.width= 8, fig.height=4}
+
 combined_resp_data |> 
-  mutate(year = year(date_time))
+  mutate(md = factor(format(combined_resp_data$date_time, format = "%Y-%m-%d"))) |> 
+  group_by(md,treatment) |> 
+  summarise(mean_flux = mean(flux, na.rm = T)) |> 
+  ggplot(aes(md, mean_flux, group = treatment, color = treatment))+
+  geom_line(size = 1.5)+
+  geom_point(size = 1.5)+
+   theme(axis.title = element_text(size = 17),
+          axis.text = element_text(size = 17),
+          legend.text = element_text(size = 17),
+          legend.title = element_text(size = 17),
+          axis.text.x = element_text(angle = 45, hjust = 0.5, vjust = 0.5),
+          panel.grid.major = element_line(color = "gray90"),
+          panel.grid.minor = element_blank(),
+         legend.position = "top")+
+  labs(x = "Sampling Date", y = "Flux")+
+  guides(color = guide_legend(title = "Treatment"))
+
+#ggsave(filename = "combined_timeseries.jpg",
+       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+       height = 195,# 
+       units = "mm",
+       dpi = 200,
+       device = "bmp"
+)
+
 
 combined_resp_data |> 
   mutate(date = date(date_time),
@@ -124,16 +178,25 @@ nrmse_sd <- rmse/sd(combined_resp_data$flux)
 )
 ```
 
+```{r}
+combined_withcar <- combined_withcar |> 
+  mutate(treatment = factor(treatment))
+```
 
 GLMM on the combined data
 ```{r}
-lmm1<- lmer(flux ~ treatment+swc+ts + (1|label) +(1|ftime), data = combined_resp_data)
+lmm1<- lmer(flux ~ treatment+swc+ts + (1|label) +(1|ftime) , data = combined_withcar)
 summary(lmm1)
-library(flexplot)
 
-visualize(lmm1, 
-          formula = flux ~ treatment| swc+ts,
-          sample = 50) 
+visualize(lmm1,
+          formula = flux~treatment,
+          plot = "model")
+
+
+lmm2 <- lmer(flux ~ treatment+swc+ts+total_c_percent + (1|label)+(1|ftime), data = combined_withcar)
+
+added.plot(flux ~ swc+ts, data = combined_withcar)
+
 ```
 dataset combined with carbon data
 ```{r}
@@ -144,12 +207,12 @@ combined_withcar |>
 
 ```{r}
 resp_normalized <- combined_withcar |> 
-  mutate(cn_ratio =  total_c_percent/total_n_percent) |> 
-  mutate(flux_normalised = flux/total_c_percent)
+  mutate(cn_ratio =  total_c_percent/total_n_percent) 
 ```
 
 ```{r}
 resp_normalized |> 
+  filter(year(date_time) == 2024) |> 
   mutate(date = date(date_time),
          year = year(date_time)) |> 
   group_by(date,treatment) |> 
@@ -160,10 +223,33 @@ resp_normalized |>
   scale_x_date(breaks = waiver(), date_labels = "%b %Y")
 ```
 
+
+Calculation of carbon stock
+
 ```{r}
-resp_normalized |> 
-  ggplot(aes(treatment,flux_normalised))+
-  geom_boxplot()+
-  facet_wrap(~month(date_time), scales = "free")
+resp_finalized <- resp_normalized |> 
+  mutate(flux_mgco2 = (flux*44.01)/10^3, 
+  c_stock_kgC_m2 = total_c_percent*bulk_density*10*0.1, 
+  flux_mgco2_kgc = flux_mgco2/c_stock_kgC_m2,
+  porosity = (1 - bulk_density/2.65)*100,
+  wfps = (swc/porosity)*100)
+```
+
+```{r}
+resp_finalized |> 
+  filter(wfps > 0) |> 
+  ggplot(aes(ts,flux_mgco2_kgc))+
+  geom_point()+
+  geom_smooth(method = "lm")
+```
+https://cran.r-project.org/web/packages/multilevelTools/vignettes/lmer-vignette.html - Important blog on model diagnostics. 
+```{r}
+lmm1 <- lmer(flux_mgco2_kgc ~ treatment + swc + ts + (ftime|label), data = resp_finalized)
+summary(lmm1)
+
+library(JWileymisc)
+library(multilevelTools)
+md <- modelDiagnostics(lmm1, ev.perc = .001)
+plot(md, ask = FALSE, ncol = 2, nrow = 3)
 ```
 

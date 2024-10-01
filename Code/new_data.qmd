@@ -64,16 +64,7 @@ combined_resp_data <- new_final1 |>
 
 ```
 
-```{r}
-new_final$date <- factor(format(new_final$date, format = "%m-%d"))
-new_final |> 
-  group_by(date,treatment) |> 
-  summarise(mean_flux = mean(flux, na.rm = T)) |> 
-  ggplot(aes(date, mean_flux, group = treatment, color = treatment))+
-  geom_line()+
-  geom_point()+
-    theme(axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))
-```
+
 
 ```{r}
 carbon_data <- read_csv("../Data/soil_carbon.csv") |> 
@@ -88,7 +79,6 @@ carbon_data <- carbon_data |>
 ```
 
 ```{r}
-combined_withcar <- combined_resp_data |> 
-  left_join(carbon_data, by = "label")
+
 ```
 

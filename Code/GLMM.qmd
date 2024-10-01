@@ -182,6 +182,7 @@ model.comparison(three_variable_fixed, test_model)
 three variable fixed seems to be doing the best!!
 
 ```{r}
+Anova(three_variable_fixed, type = 3)
 glmm <- visualize(three_variable_fixed,
           formula = flux~treatment|swc+ts,
           sample = 25,
@@ -212,26 +213,57 @@ growing <- resp_final_pm |>
 ```
 
 ```{r fig.width= 8, fig.height= 5}
-three_variable_fixed_dormant <- lmer(flux ~ treatment+swc+ts + (1|label)+(1|ftime), data = dormant)
+three_variable_fixed_dormant <- lmer(flux ~ treatment+swc+ts+treatment*swc + (1|label)+(1|ftime), data = dormant)
+flexplot(flux ~ treatment|ts+swc, data = dormant,
+         labels = list(ts = c("low","medium", "high"),
+                       swc = c("low","medium", "high")
+                       ),
+         sample = 150
+         )
 glmm_dormant <- visualize(three_variable_fixed_dormant,
-          formula = flux~ swc,
+          formula = flux~ treatment | swc+ts,
           sample = 25,
-          plot = "model")
+          plot = "model",
+          jitter = 0.2,
+          spread = "stdev",
+          labels = list(ts = c("low","medium", "high"),
+                       swc = c("low","medium", "high")
+          )
+          
+          )
+Anova(three_variable_fixed_dormant, type = 3)
+emm <- emmeans(three_variable_fixed_dormant, ~treatment) |> 
+  cld(reversed = T,
+      Letters = letters,
+      adjust = "none") |> 
+  as.data.frame() |> 
+  mutate(letter = trimws(.group)) 
 glmm_dormant_final <- glmm_dormant +
   theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))
-#ggsave(filename = "glmm_dormant.jpg",
-       plot = glmm_dormant_final,
-       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
-       height = 195,# 
-       units = "mm",
-       dpi = 200,
-       device = "bmp"
-)
+
+dormant |> 
+  ggplot(aes(treatment,flux))+
+  geom_boxplot(aes(color = treatment))+
+  geom_label(data = emm,
+             aes(x = treatment,y = emmean, label = letter),
+             size = 6)+
+  scale_fill_viridis_d()+
+  labs(x = "Treatment",
+       y = "Flux (μmol/m2-s)")+
+  theme(legend.text = element_text(size = 15),
+        legend.title = element_text(size = 15),
+        axis.text = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        panel.grid.minor = element_blank(),
+        legend.position = "none")
+  
 
 ```
 
 ```{r}
 three_variable_fixed_growing <- lmer(flux ~ treatment+swc+ts + (1|label)+(1|ftime), data = growing)
+Anova(three_variable_fixed_growing,type = 3)
+
 custom_labels <- c("swc"="Soil Water Content",
                    "ts" = "Soil temperature",
                    "treatment" = "Treatments")
