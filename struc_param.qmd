@@ -1,0 +1,16 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+library(readxl)
+```
+
+```{r}
+data <- read_xlsx("/Users/pramodhegde/Documents/DSA/licor_2/Data/resp_finalized.xlsx")
+data
+```
+

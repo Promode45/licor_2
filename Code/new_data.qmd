@@ -79,6 +79,6 @@ carbon_data <- carbon_data |>
 ```
 
 ```{r}
-
+read_csv("../Data/resp_finalized.csv")
 ```
 

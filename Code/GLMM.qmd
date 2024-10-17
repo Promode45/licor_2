@@ -299,8 +299,73 @@ Anova(three_variable_fixed_growing, type = 3)
 ```
 
 ```{r}
-#install.packages("prettyglm")
-library(prettyglm)
+library(lmerTest)
+struc <- read_xlsx("../Data/resp_finalized.xlsx") 
 
+struc_w <- struc |> 
+  mutate(flux_mgco2 = (flux*44.01)/10^3,
+    flux_mgco2_kgc = flux_mgco2/c_stock_kgC_m2,
+    ts = as.double(ts),
+    treatment = as.factor(treatment))
+
+struc_lmm <- lmer(flux_mgco2_kgc ~ treatment+ts+wfps+micro+macro + (1|label), data = struc_w)
+coef(struc_lmm)
+fixef(struc_lmm)
+ranef(struc_lmm)
+VarCorr(struc_lmm)
+visualize(struc_lmm,
+          formula = flux_mgco2_kgc ~ wfps|macro)
+anova <- Anova(struc_lmm, type = 3) |> 
+  as.data.frame()
+
+```
+
+```{r}
+struc_lmm2 <- lmer(flux_mgco2_kgc ~ treatment+ts+wfps+micro+macro+ts*wfps + (1|label), data = struc_w)
+Anova(struc_lmm2, type = 3)
+visualize(struc_lmm2, plot = "residuals")
+```
+
+```{r}
+struc_lmm3 <- lmer(flux_mgco2_kgc ~ treatment+ts+wfps+micro+macro+wfps*micro+wfps*macro + (1|label), data = struc_w)
+Anova(struc_lmm3,type = 3)
+visualize(struc_lmm3, plot = "residuals")
+```
+```{r}
+ lmer(flux_mgco2_kgc ~ treatment+ts+wfps+micro+macro+ts*micro+ts*macro + (1|label), data = struc_w)
+```
+
+```{r}
+struc_scaled <- transform(struc_w,
+                          ts_sc = scale(ts),
+                          swc_sc = scale(ts),
+                          wfps_sc = scale(wfps),
+                          micro_sc = scale(micro), 
+                          macro_sc = scale(macro)
+                          )
+```
+
+```{r}
+struc_lmm4 <- lmer(flux_mgco2_kgc ~ treatment+ts_sc+wfps_sc+micro_sc+macro_sc + (1|label), data = struc_scaled)
+visualize(struc_lmm4, plot = "residuals")
+Anova(struc_lmm4, type = 3)
+```
+
+```{r}
+struc_lmm5 <- lmer(flux_mgco2_kgc ~ treatment+ts_sc+wfps_sc+micro_sc+macro_sc+ts_sc*wfps_sc + (1|label), data = struc_scaled)
+visualize(struc_lmm5, plot = "residuals")
+Anova(struc_lmm5, type = 3)
+```
+
+```{r}
+struc_lmm6 <- lmer(flux_mgco2_kgc ~ treatment+ts_sc+wfps_sc+micro_sc+macro_sc+wfps_sc*micro_sc+wfps_sc*macro_sc + (1|label), data = struc_scaled)
+Anova(struc_lmm6, type = 3)
+visualize(struc_lmm6, plot = "residuals")
+```
+
+```{r}
+struc_lmm7 <- lmer(flux_mgco2_kgc ~ treatment+ts_sc+wfps_sc+micro_sc+macro_sc+ts_sc*micro_sc+ts_sc*macro_sc + (1|label), data = struc_scaled)
+Anova(struc_lmm7, type = 3)
+visualize(struc_lmm7, plot = "residuals")
 ```
 

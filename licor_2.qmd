@@ -130,9 +130,10 @@ resp_data_w <- resp_data_w %>%
   mutate(time_of_day = if_else(am(date_time),"am","pm")) |> 
   mutate(ftime = factor(time)) 
 
-table(resp_data_w[,c("label","treatment")])
+#table(resp_data_w[,c("label","treatment")])
 #write.csv(resp_data_w, "Data/licor_wrangled.csv")
 ```
+
 ```{r}
 resp <- resp_data_w |> 
   dplyr::select(-c(co2,drying_cycle,dar,rep,fdar,time, time_of_day,ftime,iqr,lower_bound,upper_bound,mean, ta, day,month))
@@ -189,9 +190,10 @@ resp_final <-
             ta = mean(ta),
             date_time = mean(date_time),
             .by = c("label","day","month","time_of_day","treatment","drying_cycle","ftime","time","rep","dar","fdar")) |> 
-    ungroup() 
+    ungroup() |> 
+  mutate(label = trimws(factor(label))) |> 
+  arrange(label)
 
-resp_final
 #write.csv(resp_final, "Data/licor_aggregated.csv")
 library(lubridate)
 resp_final_comb <- resp_final |> 
@@ -358,13 +360,13 @@ resp_final1 |>
   geom_vline(xintercept = c("01-29","02-05","03-27","07-30"), linetype = "dashed")
   
 
-ggsave(filename = "timeseries_swc.jpg",
-       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
-       height = 195,# 
-       units = "mm",
-       dpi = 200,
-       device = "bmp"
-)
+# ggsave(filename = "timeseries_swc.jpg",
+#        width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+#        height = 195,# 
+#        units = "mm",
+#        dpi = 200,
+#        device = "bmp"
+# )
 ```
 
 subsetting different drying cycles 

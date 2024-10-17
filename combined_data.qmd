@@ -67,13 +67,13 @@ combined_resp_data |>
   labs(x = "Soil temperature (°C)",
        y = "Mean flux (μmol/m2-s)",
        title = "Flux vs. Temperature")
-#ggsave(filename = "tempvsflux.jpg",
-       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
-       height = 195,# 
-       units = "mm",
-       dpi = 200,
-       device = "bmp"
-)
+# ggsave(filename = "tempvsflux.jpg",
+#        width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+#        height = 195,# 
+#        units = "mm",
+#        dpi = 200,
+#        device = "bmp"
+# )
 ```
 
 
@@ -99,13 +99,13 @@ combined_resp_data |>
   labs(x = "Sampling Date", y = "Flux")+
   guides(color = guide_legend(title = "Treatment"))
 
-#ggsave(filename = "combined_timeseries.jpg",
-       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
-       height = 195,# 
-       units = "mm",
-       dpi = 200,
-       device = "bmp"
-)
+# ggsave(filename = "combined_timeseries.jpg",
+#        width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+#        height = 195,# 
+#        units = "mm",
+#        dpi = 200,
+#        device = "bmp"
+# )
 
 
 combined_resp_data |> 
@@ -142,11 +142,6 @@ plot(resp_xts_m, col = c("red", "green", "blue", "purple"), grid.ticks.on = "day
 ```
 
 
-```{r}
-combined_resp_data |> 
-  ggplot(aes(treatment,flux))+
-  geom_boxplot()
-```
 
 ```{r}
 combined_resp_data |> 
@@ -169,13 +164,13 @@ pred <- predict(model)
 rmse <- rmse(combined_resp_data$flux, pred)
 nrmse_sd <- rmse/sd(combined_resp_data$flux)
 
-#ggsave(filename = "tempvsflux.jpg",
-       width = 270, # 14.1 x 5.05 in 358 x 256 mm 
-       height = 195,# 
-       units = "mm",
-       dpi = 200,
-       device = "bmp"
-)
+# ggsave(filename = "tempvsflux.jpg",
+#        width = 270, # 14.1 x 5.05 in 358 x 256 mm 
+#        height = 195,# 
+#        units = "mm",
+#        dpi = 200,
+#        device = "bmp"
+# )
 ```
 
 ```{r}
@@ -228,28 +223,84 @@ Calculation of carbon stock
 
 ```{r}
 resp_finalized <- resp_normalized |> 
-  mutate(flux_mgco2 = (flux*44.01)/10^3, 
-  c_stock_kgC_m2 = total_c_percent*bulk_density*10*0.1, 
-  flux_mgco2_kgc = flux_mgco2/c_stock_kgC_m2,
-  porosity = (1 - bulk_density/2.65)*100,
-  wfps = (swc/porosity)*100)
+  mutate(
+    flux_mgco2 = (flux*44.01)/10^3, 
+    root_mass_g = root_density*202.6829916,
+    c_stock_kgC_m2 = total_c_percent*bulk_density*10*0.1, 
+    flux_mgco2_kgc = flux_mgco2/(c_stock_kgC_m2),
+    porosity = (1 - bulk_density/2.65),
+    wfps = (swc/porosity)*100) |> 
+    dplyr::select(!flux_mgco2)
+
+#write.csv(resp_finalized,"Data/resp_finalized.csv")
 ```
 
 ```{r}
 resp_finalized |> 
-  filter(wfps > 0) |> 
-  ggplot(aes(ts,flux_mgco2_kgc))+
-  geom_point()+
-  geom_smooth(method = "lm")
+  filter(!flux > 6) |> 
+  ggplot(aes(flux,flux_mgco2_kgc))+
+  geom_point(aes(color = treatment))+
+  geom_smooth(method = "lm", aes(color = treatment), se = F)+
+  stat_regline_equation(
+    aes(label = paste(after_stat(eq.label), after_stat(rr.label), sep = "~~~~"), color = treatment), show.legend = F) +
+   theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        strip.text = element_text(size = 15),  # Facet label text
+        legend.text = element_text(size = 13),
+        legend.title = element_text(size = 15),
+        plot.title = element_text(size = 15, face = "bold"),
+        legend.position = "top") +
+  guides(color = guide_legend(title = "Treatment"),
+         shape = guide_legend(title = "Treatment")) +
+  labs(x = "Mean flux (μmol/m2-s)",
+       y = "Standardized flux (mgCO2/kgC-s)",
+       title = "Standardized with soil carbon(kgC) and rootmass(g)"
+  )
+#ggsave("Output/fluxvsstdflux.jpg")
 ```
 https://cran.r-project.org/web/packages/multilevelTools/vignettes/lmer-vignette.html - Important blog on model diagnostics. 
+
+
 ```{r}
-lmm1 <- lmer(flux_mgco2_kgc ~ treatment + swc + ts + (ftime|label), data = resp_finalized)
-summary(lmm1)
+
+resp_finalized |> 
+  filter(wfps > 0) |> 
+  mutate(ts_binned = cut_interval(ts,3)) |> 
+  #mutate(month_yr = format(date_time, "%Y-%m")) |> 
+  ggplot(aes(wfps,flux_mgco2_kgc))+
+  geom_point(aes(color = treatment))+
+  geom_smooth(method = "lm", se = F,aes(colour = treatment))
+```
+
+```{r}
+year_1 <- resp_finalized |> 
+  filter(year == 2023) |> 
+  filter(!wfps <0.01)
+year_2 <- resp_finalized |> 
+  filter(year == 2024)
+resp_x <- resp_finalized |> 
+  filter(!wfps < 0.01)
+lmm_y1 <- lmer(flux_mgco2_kgc ~ treatment + wfps + ts + (1|label) , data = resp_x)
+summary(lmm_y1)
+Anova(lmm_y1, type = 3)
+
+lmm_y2 <- lmer(flux_mgco2_kgc ~ treatment + wfps + ts + (1|label) , data = year_2)
+summary(lmm_y2)
+Anova(lmm_y2,type = 3)
 
 library(JWileymisc)
 library(multilevelTools)
 md <- modelDiagnostics(lmm1, ev.perc = .001)
 plot(md, ask = FALSE, ncol = 2, nrow = 3)
+```
+
+
+```{r}
+library(flexplot)
+visualize(lmm_y1, formula = flux_mgco2_kgc ~ ts|wfps, sample = 25)
+```
+
+```{r}
+visualize(lmm_y2, formula = flux_mgco2_kgc ~ wfps|ts, sample = 25)
 ```
 

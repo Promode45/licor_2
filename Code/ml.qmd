@@ -1,0 +1,142 @@
+---
+title: "ML"
+format: html
+editor: visual
+---
+```{r}
+library(tidyverse)
+library(ranger)
+library(tidymodels)
+library(vip)
+library(ranger)
+library(finetune)
+```
+
+```{r}
+struc <- read_xlsx("../Data/resp_finalized.xlsx") |> 
+  mutate(treatment = factor(treatment))
+
+struc_w <- struc |> 
+  dplyr::select(-c(c_stock_kgC_m2,flux_mgco2_kgc, year,date_time,time,ftime, yday)) |> 
+  na.omit() |> 
+  mutate(ts = as.double(ts))
+```
+
+```{r}
+set.seed(123)
+
+struc_split <- initial_split(struc_w,
+                             prop = 0.7)
+
+struc_split
+```
+
+```{r}
+struc_training <- training(struc_split)
+struc_test <- testing(struc_split)
+```
+
+```{r}
+struc_recipe <- recipe(flux ~ .,
+                       data = struc_training) |> 
+  step_rm(label,swc,porosity) |> 
+  step_impute_knn(ts)
+  #step_normalize(all_numeric(), -all_outcomes())
+
+struc_prep <- struc_recipe |> 
+  prep()
+```
+
+```{r}
+rf_spec <- 
+  # Specifying rf as our model type, asking to tune the hyperparameters
+rand_forest(trees = tune(),
+            mtry = tune()
+            ) %>% 
+    # Specify the engine
+set_engine("ranger") %>% 
+    # Specifying mode  
+set_mode("regression")
+rf_spec
+```
+
+```{r}
+set.seed(34549)
+resampling_foldcv <- vfold_cv(struc_training, 
+                              v = 5)
+
+resampling_foldcv
+
+```
+
+```{r}
+set.seed(76544)
+rf_grid_result <- tune_sim_anneal(object = rf_spec,
+                     preprocessor = struc_recipe,
+                     resamples = resampling_foldcv,
+                    iter = 10
+                     )
+
+
+rf_grid_result
+```
+
+```{r}
+rf_grid_result |> 
+  collect_metrics()
+
+best_rmse <- rf_grid_result %>% 
+  select_by_pct_loss("trees",
+                     metric = "rmse",
+                     limit = 2
+                     )
+best_rmse
+best_r2 <- rf_grid_result %>% 
+  select_by_pct_loss("trees",
+                     metric = "rsq",
+                     limit = 2)
+
+
+best_r2
+```
+
+```{r}
+final_spec <- rand_forest(trees = best_r2$trees,
+                          mtry = best_r2$mtry) %>%
+  # Specify the engine
+  set_engine("ranger",
+             importance = "permutation") %>% 
+
+    # Specifying mode  
+  set_mode("regression")
+  
+
+final_spec
+```
+```{r}
+final_fit <- last_fit(final_spec,
+                struc_recipe,
+                split = struc_split)
+final_fit |> 
+  collect_predictions()
+
+final_fit |> 
+  collect_metrics()
+```
+
+```{r}
+final_spec %>%
+  fit(flux ~ .,
+         data = bake(struc_prep, struc_w)) %>%
+    vi() %>%
+  mutate(
+    Variable = fct_reorder(Variable, 
+                           Importance)
+  ) %>%
+  ggplot(aes(x = Importance, 
+             y = Variable)) +
+  geom_col() +
+  scale_x_continuous(expand = c(0, 0)) +
+  labs(y = NULL)
+```
+
