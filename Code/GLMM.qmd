@@ -300,7 +300,7 @@ Anova(three_variable_fixed_growing, type = 3)
 
 ```{r}
 library(lmerTest)
-struc <- read_xlsx("../Data/resp_finalized.xlsx") 
+struc <- readxl::read_xlsx("../Data/resp_finalized.xlsx") 
 
 struc_w <- struc |> 
   mutate(flux_mgco2 = (flux*44.01)/10^3,
@@ -321,13 +321,13 @@ anova <- Anova(struc_lmm, type = 3) |>
 ```
 
 ```{r}
-struc_lmm2 <- lmer(flux_mgco2_kgc ~ treatment+ts+wfps+micro+macro+ts*wfps + (1|label), data = struc_w)
+struc_lmm2 <- lmer(flux_mgco2_kgc ~ treatment+ts+wfps+micro+macro+ts:wfps + (1|label), data = struc_w)
 Anova(struc_lmm2, type = 3)
 visualize(struc_lmm2, plot = "residuals")
 ```
 
 ```{r}
-struc_lmm3 <- lmer(flux_mgco2_kgc ~ treatment+ts+wfps+micro+macro+wfps*micro+wfps*macro + (1|label), data = struc_w)
+struc_lmm3 <- lmer(flux_mgco2_kgc ~ treatment+ts+wfps+micro+macro+wfps:micro+wfps:macro+ts:wfps + (1|label), data = struc_w)
 Anova(struc_lmm3,type = 3)
 visualize(struc_lmm3, plot = "residuals")
 ```
@@ -341,7 +341,8 @@ struc_scaled <- transform(struc_w,
                           swc_sc = scale(ts),
                           wfps_sc = scale(wfps),
                           micro_sc = scale(micro), 
-                          macro_sc = scale(macro)
+                          macro_sc = scale(macro),
+                          root_density_sc = scale(root_density)
                           )
 ```
 
@@ -367,5 +368,58 @@ visualize(struc_lmm6, plot = "residuals")
 struc_lmm7 <- lmer(flux_mgco2_kgc ~ treatment+ts_sc+wfps_sc+micro_sc+macro_sc+ts_sc*micro_sc+ts_sc*macro_sc + (1|label), data = struc_scaled)
 Anova(struc_lmm7, type = 3)
 visualize(struc_lmm7, plot = "residuals")
+```
+
+
+```{r}
+struc_lmmx <- lmer(flux_mgco2_kgc ~ treatment+ts_sc+wfps_sc+micro_sc+macro_sc+ts_sc*micro_sc+ts_sc*macro_sc+wfps_sc:micro_sc+wfps_sc:macro_sc+ts_sc:wfps_sc+micro_sc:macro_sc + (1|label), data = struc_scaled)
+Anova(struc_lmmx, type = 3)
+```
+
+```{r}
+temp_cat <- struc_scaled |> 
+  mutate(temp = case_when(
+    7.433 < ts & ts < 17.942 ~ "low",
+    17.942 < ts & ts < 31.20 ~ "medium",
+    ts >= 31.20 ~ "high"
+  ),
+  moisture = case_when(
+    swc <= 0.22 ~ "low",
+    swc > 0.22 ~ "high"
+  ))
+temp_cat |> 
+  filter(moisture == "medium")
+
+summary(temp_cat$ts)
+```
+
+```{r}
+struc_lmm8 <- lmer(flux_mgco2_kgc ~ treatment+temp+moisture+wfps_sc+micro_sc+macro_sc + (1|label), data = temp_cat)
+Anova(struc_lmm8, type =3)
+visualize(struc_lmm8, formula = flux_mgco2_kgc ~ temp)
+```
+
+```{r}
+struc_lmm9 <-  lmer(flux_mgco2_kgc ~ treatment+temp+moisture+wfps_sc+micro_sc+macro_sc+temp:moisture + (1|label), data = temp_cat)
+Anova(struc_lmm9, type = 3)
+visualize(struc_lmm9, formula = flux_mgco2_kgc ~ temp|moisture)
+```
+
+```{r}
+struc_lmm10 <- lmer(flux_mgco2_kgc ~ treatment + temp + moisture+wfps_sc + micro_sc + macro_sc + wfps_sc:micro_sc + (1|label), data = temp_cat)
+Anova(struc_lmm10, type = 3)
+visualize(struc_lmm10, formula = flux_mgco2_kgc ~ temp|moisture)
+```
+
+```{r}
+struc_lmmxy <- lmer(flux_mgco2_kgc ~ treatment+temp+wfps_sc+ root_density_sc+micro_sc+macro_sc+temp:micro_sc+temp*macro_sc+wfps_sc:micro_sc+wfps_sc:macro_sc+temp:wfps_sc+micro_sc:macro_sc+root_density_sc*temp+root_density_sc:wfps_sc+root_density_sc:micro_sc+root_density_sc:macro_sc + (1|label), data = temp_cat)
+Anova(struc_lmmxy, type = 3)
+visualize(struc_lmmxy, plot = "residuals")
+```
+
+```{r}
+struc_lmmxyz <- lmer(flux_mgco2_kgc ~ treatment + temp*wfps_sc + temp*micro_sc + wfps_sc*micro_sc+root_density_sc*micro_sc + (1|label), data = temp_cat)
+Anova(struc_lmmxyz, type = 3)
+
 ```
 
