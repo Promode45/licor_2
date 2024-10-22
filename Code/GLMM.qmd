@@ -4,7 +4,7 @@ format: html
 editor: visual
 ---
 
-```{r}
+```{r echo=FALSE}
 #|echo: false
 library(tidyverse)
 library(janitor)
@@ -321,6 +321,7 @@ anova <- Anova(struc_lmm, type = 3) |>
 ```
 
 ```{r}
+library(flexplot)
 struc_lmm2 <- lmer(flux_mgco2_kgc ~ treatment+ts+wfps+micro+macro+ts:wfps + (1|label), data = struc_w)
 Anova(struc_lmm2, type = 3)
 visualize(struc_lmm2, plot = "residuals")
@@ -350,30 +351,39 @@ struc_scaled <- transform(struc_w,
 struc_lmm4 <- lmer(flux_mgco2_kgc ~ treatment+ts_sc+wfps_sc+micro_sc+macro_sc + (1|label), data = struc_scaled)
 visualize(struc_lmm4, plot = "residuals")
 Anova(struc_lmm4, type = 3)
+vif(struc_lmm4)
 ```
 
 ```{r}
 struc_lmm5 <- lmer(flux_mgco2_kgc ~ treatment+ts_sc+wfps_sc+micro_sc+macro_sc+ts_sc*wfps_sc + (1|label), data = struc_scaled)
 visualize(struc_lmm5, plot = "residuals")
 Anova(struc_lmm5, type = 3)
+vif(struc_lmm5)
 ```
 
 ```{r}
 struc_lmm6 <- lmer(flux_mgco2_kgc ~ treatment+ts_sc+wfps_sc+micro_sc+macro_sc+wfps_sc*micro_sc+wfps_sc*macro_sc + (1|label), data = struc_scaled)
 Anova(struc_lmm6, type = 3)
 visualize(struc_lmm6, plot = "residuals")
+vif(struc_lmm6)
 ```
 
 ```{r}
 struc_lmm7 <- lmer(flux_mgco2_kgc ~ treatment+ts_sc+wfps_sc+micro_sc+macro_sc+ts_sc*micro_sc+ts_sc*macro_sc + (1|label), data = struc_scaled)
 Anova(struc_lmm7, type = 3)
 visualize(struc_lmm7, plot = "residuals")
+vif(struc_lmm7)
+```
+```{r}
+anova(struc_lmm7, struc_lmm6,struc_lmm5,struc_lmm4)
 ```
 
 
 ```{r}
 struc_lmmx <- lmer(flux_mgco2_kgc ~ treatment+ts_sc+wfps_sc+micro_sc+macro_sc+ts_sc*micro_sc+ts_sc*macro_sc+wfps_sc:micro_sc+wfps_sc:macro_sc+ts_sc:wfps_sc+micro_sc:macro_sc + (1|label), data = struc_scaled)
 Anova(struc_lmmx, type = 3)
+vif(struc_lmmx)
+
 ```
 
 ```{r}
@@ -390,13 +400,13 @@ temp_cat <- struc_scaled |>
 temp_cat |> 
   filter(moisture == "medium")
 
-summary(temp_cat$ts)
 ```
 
 ```{r}
 struc_lmm8 <- lmer(flux_mgco2_kgc ~ treatment+temp+moisture+wfps_sc+micro_sc+macro_sc + (1|label), data = temp_cat)
 Anova(struc_lmm8, type =3)
 visualize(struc_lmm8, formula = flux_mgco2_kgc ~ temp)
+vif(struc_lmm8)
 ```
 
 ```{r}
@@ -412,14 +422,49 @@ visualize(struc_lmm10, formula = flux_mgco2_kgc ~ temp|moisture)
 ```
 
 ```{r}
-struc_lmmxy <- lmer(flux_mgco2_kgc ~ treatment+temp+wfps_sc+ root_density_sc+micro_sc+macro_sc+temp:micro_sc+temp*macro_sc+wfps_sc:micro_sc+wfps_sc:macro_sc+temp:wfps_sc+micro_sc:macro_sc+root_density_sc*temp+root_density_sc:wfps_sc+root_density_sc:micro_sc+root_density_sc:macro_sc + (1|label), data = temp_cat)
-Anova(struc_lmmxy, type = 3)
-visualize(struc_lmmxy, plot = "residuals")
+struc_lmm11 <- lmer(flux_mgco2_kgc ~ treatment+temp+wfps_sc+ root_density_sc+micro_sc+macro_sc+temp:micro_sc+temp*macro_sc+wfps_sc:micro_sc+wfps_sc:macro_sc+temp:wfps_sc+micro_sc:macro_sc+root_density_sc*temp+root_density_sc:wfps_sc+root_density_sc:micro_sc+root_density_sc:macro_sc + (1|label), data = temp_cat)
+Anova(struc_lmm11, type = 3)
+visualize(struc_lmm11, plot = "residuals")
+vif(struc_lmm11)
 ```
 
 ```{r}
-struc_lmmxyz <- lmer(flux_mgco2_kgc ~ treatment + temp*wfps_sc + temp*micro_sc + wfps_sc*micro_sc+root_density_sc*micro_sc + (1|label), data = temp_cat)
-Anova(struc_lmmxyz, type = 3)
+struc_lmm12 <- lmer(flux_mgco2_kgc ~ treatment + temp*wfps_sc + temp*micro_sc + wfps_sc*micro_sc+root_density_sc*micro_sc + macro_sc+ (1|label), data = temp_cat)
+Anova(struc_lmm12, type = 3)
+car::vif(struc_lmm12)
+```
+```{r}
+library(interactions)
 
+# Create an interaction plot for temp * wfps_sc
+interact_plot(struc_lmm12, pred = temp, modx = wfps_sc, 
+              interval = TRUE, plot.points = TRUE) +
+  theme_classic()
+```
+
+```{r}
+anova(struc_lmm10, struc_lmm8,struc_lmm9,struc_lmm11,struc_lmm12, struc_lmm13)
+```
+
+```{r}
+struc_lmm13 <-  lmer(flux_mgco2_kgc ~ treatment+ts_sc+wfps_sc+root_density_sc+micro_sc+macro_sc+ts_sc:wfps_sc + (1|label), data = temp_cat)
+Anova(struc_lmm13, type = 3)
+summary(struc_lmm13)
+vif(struc_lmm13)
+```
+```{r}
+
+```
+
+```{r}
+library(plotly)
+
+plot_ly(temp_cat, x = ~ts, y = ~wfps, z = ~flux_mgco2_kgc, 
+        type = "scatter3d", mode = "markers") |> 
+  layout(scene = list(
+    xaxis = list(title = "Temperature"),
+    yaxis = list(title = "WFPS"),
+    zaxis = list(title = "CO₂ Flux")
+  ))
 ```
 
