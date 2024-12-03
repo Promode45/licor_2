@@ -1,0 +1,392 @@
+---
+title: "models"
+format: html
+editor: visual
+---
+
+```{r echo=FALSE}
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(hms)
+library(lme4)
+
+```
+
+```{r}
+data <- read_xlsx("../Data/resp_finalized.xlsx") |> 
+  mutate(ts = as.numeric(ts),
+         flux_mgco2 = (flux*44.01)/10^3,
+    flux_mgco2_kgc = flux_mgco2/c_stock_kgC_m2,
+    label = factor(label),
+    treatment = factor(treatment)) |> 
+  dplyr::select(-c(7:10))
+
+data_w <- data |> 
+  mutate(day = yday(date_time),
+         time = trunc_hms(as_hms(date_time), 5),
+         fertilization = case_when(treatment == "NPK" | treatment == "NPK+Disturbance" ~ "Fertilized",
+                                   .default = "Unfertilized"),
+         disturbance = case_when(treatment == "Disturbance" | treatment == "NPK+Disturbance" ~ "Disturbed",
+                                 .default = "Undisturbed"),
+         fertilization = factor(fertilization),
+         disturbance = factor(disturbance))
+data_temp <- data_w |> 
+  mutate(temp_range = case_when(ts <= 20 ~ "low",
+                   ts > 20 & ts <= 30 ~ "medium",
+                   ts > 30 ~ "high")) |> 
+  mutate(temp_range = factor(temp_range)) |> 
+  na.omit()
+```
+```{r}
+data_w |> 
+  ggplot(aes(ts,flux_mgco2_kgc))+
+  geom_point()
+```
+
+```{r}
+null <- lmer(flux_mgco2_kgc ~ temp_range + day + time + (1|label), data = data_temp)
+```
+
+```{r}
+h1 <- lmer(flux_mgco2_kgc ~ treatment + temp_range + day + time + (1|label), data = data_temp)
+```
+
+```{r}
+h2 <- lmer(flux_mgco2_kgc ~ temp_range + wfps + day + time + (1|label), data = data_temp)
+```
+
+```{r}
+h3 <- lmer(flux_mgco2_kgc ~ temp_range + wfps + temp_range:wfps + day + time + (1|label), data = data_temp)
+```
+
+```{r}
+h4 <- lmer(flux_mgco2_kgc ~ temp_range + wfps + small + macro + wfps:small + wfps:macro + day + time + (1|label), data = data_temp)
+```
+
+```{r}
+h5 <- lmer(flux_mgco2_kgc ~ temp_range + root_density + day + time + (1|label), data = data_temp)
+```
+
+```{r}
+h6 <- lmer(flux_mgco2_kgc ~ temp_range + fertilization + day + time + (1|label), data = data_temp)
+```
+
+```{r}
+h7 <- lmer(flux_mgco2_kgc ~ temp_range + disturbance + day + time + (1|label), data = data_temp)
+```
+
+```{r}
+h8 <- lmer(flux_mgco2_kgc ~ temp_range + micro + day + time + (1|label) , data = data_temp)
+```
+
+```{r}
+h9 <- lmer(flux_mgco2_kgc ~ temp_range + macro + wfps + macro:wfps + day + time + (1|label), data = data_temp)
+```
+```{r}
+h10 <- lmer(flux_mgco2_kgc ~ temp_range + micro*treatment + day + time + (1|label), data = data_temp)
+```
+```{r}
+h11 <- lmer(flux_mgco2_kgc ~ temp_range + medium*treatment + day + time + (1|label), data = data_temp)
+```
+```{r}
+struc_nonsc <- lmer(flux_mgco2_kgc ~ temp_range + micro_wfpv  + medium_wfpv  + day + time + (1|label), data = data_temp)
+```
+
+```{r}
+global <- lmer(flux_mgco2_kgc ~ treatment + ts*wfps + wfps*small + wfps*macro + wfps*root_density+ day+time + (1|label), data = data_temp)
+```
+
+```{r}
+sel <- model.sel(null,h1,h2,h3,h4,h5,h6,h7,h8,h9,h10,h11,global,struc)
+```
+```{r}
+cov <- vcov(h3)
+cov2cor(cov)
+```
+
+```{r}
+preds <- predict(h3) |> 
+  as.data.frame()  
+  
+data_w |> 
+  na.omit() |> 
+  cbind(preds) |> 
+ggplot(aes(flux_mgco2_kgc,predict(h3sc)))+
+  geom_point()
+```
+
+```{r}
+data_scaled <- data_temp |> 
+  mutate(across(where(is.numeric)& !all_of("flux_mgco2_kgc"), ~scale(.x))) |> 
+  na.omit()
+```
+```{r}
+null_sc <- lmer(flux_mgco2_kgc ~ temp_range + day + time + (1|label), data = data_scaled)
+```
+
+```{r}
+h1sc <- lmer(flux_mgco2_kgc ~ treatment + temp_range + day + time + (1|label), data = data_scaled)
+```
+
+```{r}
+h2sc <- lmer(flux_mgco2_kgc ~ temp_range + wfps + day + time + (1|label), data = data_scaled)
+```
+
+```{r}
+h3sc <- lmer(flux_mgco2_kgc ~ temp_range + wfps + temp_range:wfps + day + time + (1|label), data = data_scaled)
+```
+
+```{r}
+h4sc <- lmer(flux_mgco2_kgc ~ temp_range + wfps + small + macro + wfps:small + wfps:macro + day + time + (1|label), data = data_scaled)
+```
+
+```{r}
+h5sc <- lmer(flux_mgco2_kgc ~ temp_range + root_density + day + time + (1|label), data = data_scaled)
+```
+
+```{r}
+h6sc <- lmer(flux_mgco2_kgc ~ temp_range + fertilization + day + time + (1|label), data = data_scaled)
+```
+
+```{r}
+h7sc <- lmer(flux_mgco2_kgc ~ temp_range + disturbance + day + time + (1|label), data = data_scaled)
+```
+
+```{r}
+h8sc <- lmer(flux_mgco2_kgc ~ temp_range + small_wfpv + day + time + (1|label) , data = data_scaled)
+```
+
+```{r}
+h9sc <- lmer(flux_mgco2_kgc ~ temp_range + small_wfpv+macro_wfpv + day + time + (1|label), data = data_scaled)
+```
+```{r}
+h10sc <- lmer(flux_mgco2_kgc ~ temp_range + micro_wfpv + day + time + (1|label), data = data_scaled)
+```
+```{r}
+h11sc <- lmer(flux_mgco2_kgc ~ temp_range + medium_wfpv + day + time + (1|label), data = data_scaled)
+```
+```{r}
+struc <- lmer(flux_mgco2_kgc ~ temp_range + micro_wfpv  + medium_wfpv  + day + time + (1|label), data = data_scaled)
+```
+
+```{r}
+global_sc <- lmer(flux_mgco2_kgc ~ temp_range + root_density+ micro_wfpv + macro_wfpv+ small_wfpv + medium_wfpv+day+time + (1|label), data = data_scaled)
+```
+
+```{r}
+library(MuMIn)
+sel_sc <- model.sel(null_sc,h1sc,h2sc,h3sc,h4sc,h5sc,h6sc,h7sc,h8sc,h9sc,h10sc,h11sc,global_sc,struc)
+```
+
+```{r}
+options(na.action = "na.fail")
+x <- dredge(global_sc , beta = F, evaluate = T, rank = AICc)
+options(na.action = "na.omit")
+head(x)
+```
+
+To rescale model coefficients - 
+https://stats.stackexchange.com/questions/254934/what-is-the-interpretation-of-scaled-regression-coefficients-when-only-the-predi
+https://stackoverflow.com/questions/14510277/scale-back-linear-regression-coefficients-in-r-from-scaled-and-centered-data
+```{r}
+library(magrittr)
+library(generics)
+library(ggiraph)
+library(ggiraphExtra)
+avg <- model.avg(struc,h2sc)
+summary(avg)
+
+coef_avg <- coef(avg) |> 
+  as.list()
+
+coef_avg$micro_wfpv <- coef_avg$micro_wfpv/sd(data_temp$micro_wfpv,na.rm = T)
+coef_avg$medium_wfpv <- coef_avg$medium_wfpv/sd(data_temp$medium_wfpv,na.rm = T)
+coef_avg$day <- coef_avg$day/sd(data_temp$day,na.rm = T)
+coef_avg$wfpv <- coef_avg$wfpv/sd(data_temp$wfpv,na.rm = T)
+
+avg_pred <- predict(avg, newdata = data_scaled) |> 
+  as.data.frame() |> 
+  cbind(data_temp$wfps)
+
+
+
+colnames(avg_pred) <- c("predictions","wfps")
+
+data_temp |> 
+  na.omit() |> 
+  cbind(predict(avg, newdata = data_scaled)) |> 
+ggplot(aes(flux_mgco2_kgc,predict(avg)))+
+  geom_point()
+
+# Assuming sel_sc is your model selection object
+# Get model names sorted by weights
+top_models <- rownames(subset(sel_sc, weight >= 0.1))
+
+# Perform model averaging on the top models
+avg_model <- model.avg(get.models(sel_sc, subset = top_models))
+
+# Summary of the averaged model
+summary(avg_model)
+confint(avg_model, level = 0.95)
+sw(avg_model)
+coef_avg <- data.frame(coef_avg) |> 
+  pivot_longer(cols = everything(),
+    names_to = "coefficients",
+               values_to = "value")
+```
+
+```{r}
+library(flexplot)
+visualize(struc, plot = "residuals")
+```
+
+
+
+
+
+
+```{r fig.width=10}
+library(psych)
+corr_data <- bind_cols(data_temp[,20:24], data_temp[,7:10], data_temp[,15])
+m = cor(corr_data, use = "complete.obs")
+corPlot(m)
+```
+
+
+```{r}
+rescale.coefs <- function(beta,mu,sigma) {
+    beta2 <- beta ## inherit names etc.
+    beta2[-1] <- sigma[1]*beta[-1]/sigma[-1]
+    beta2[1] <- sigma[1]*beta[1]+mu[1]-sum(beta2[-1]*mu[-1])
+    beta2
+}
+```
+
+```{r}
+coef_avg
+data_temp <- data_temp |> 
+  na.omit()
+ggplot()+
+  geom_point(aes(data_temp$wfps,data_temp$flux_mgco2_kgc))+
+  geom_point(color = "red", data = avg_pred, aes(x = wfps, y = predictions))
+
+
+data_temp |>
+  ggplot()+
+  geom_point(aes(wfps,flux_mgco2_kgc))+
+  geom_point(data = avg_pred, aes(x = wfps, y =predictions), color = "red")+
+  facet_wrap(~temp_range)
+```
+
+```{r}
+scaled_data <- data.frame(scale(data))
+
+# Calculate the means and standard deviations of original data
+means <- sapply(data_temp, mean, na.rm = TRUE)
+sds <- sapply(data_temp, sd, na.rm = TRUE)
+
+# Display the means and standard deviations
+means
+sds
+```
+
+-- Reset 
+
+
+
+```{r}
+library(car)
+install.packages("effects")
+library(effects)
+est <- Effect("micro_wfpv", partial.residuals = T, struc)
+plot(est)
+
+data_temp |> 
+  ggplot(aes(wfps, flux_mgco2_kgc, size = micro_wfpv, color = temp_range))+
+  geom_point(alpha = 0.5)+
+  scale_size(range = c(.5,15), name = "micro")
+```
+
+```{r}
+data_temp |> 
+  ggplot(aes(medium_wfpv,flux_mgco2_kgc))+
+  geom_point()
+```
+
+```{r}
+coef_df <- as.data.frame(summary(avg)$coefficients)
+summary(avg)
+```
+
+```{r}
+summary(avg, full = T)
+```
+
+```{r}
+variable <- c("intercept","micro_wfpv","medium_wfpv", "day", "time", "wfps")
+estimate <- c(8.389e-02,8.269e-03,1.048e-02,9.784e-03,-3.083e-07,2.845e-03)
+adjusted_se <- c(1.381e-02,4.389e-03,5.346e-03,3.529e-03,2.754e-07,6.066e-03)
+
+coef_df1 <- data.frame(variable, estimate,adjusted_se)
+
+coef_df1 <- coef_df1 |> 
+  mutate(upper_ci = estimate + (1.96 * adjusted_se),
+         lower_ci = estimate - (1.96 * adjusted_se))
+
+struc_summary <- summary(struc)$coefficients |> 
+  as.data.frame()
+
+# Move row names to a new column and give it a header
+struc_summary <- cbind(Coefficient = rownames(struc_summary), struc_summary)
+colnames(struc_summary) <- c("coeff","estimate","std_error","t_value")
+# Remove the row names now that they’re in a column
+rownames(struc_summary) <- NULL
+
+# View the updated data frame
+struc_summary
+
+struc_summary <- struc_summary |> 
+  mutate(upper_ci = estimate + (1.96 * std_error),
+         lower_ci = estimate - (1.96 * std_error))
+```
+https://stats.stackexchange.com/questions/89747/how-to-describe-or-visualize-a-multiple-linear-regression-model
+
+```{r}
+coef_df1 |> 
+  filter(!variable == "intercept") |> 
+ggplot(aes(x = estimate, y = variable)) +
+  geom_point(size = 3) +                    # Points for slopes
+  geom_errorbarh(aes(xmin = lower_ci, xmax = upper_ci), height = 0.2) +  # Horizontal error bars
+  geom_vline(xintercept = 0, linetype = "dashed") +    # Dashed line at 0
+  labs(x = "Standardized Slope (ΔY/Δsd(X))", y = NULL) + # Labels
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 12), # Adjust y-axis text size if needed
+    panel.grid.minor = element_blank()     # Remove minor grid lines for cleaner look
+  )
+```
+
+```{r}
+struc_summary$coeff <- c("Intercept","temp_rangelow","temp_rangemedium","Micro_wfpv","Medium_wfpv","Day","Time")
+struc_summary |> 
+   filter(!coeff == c("Intercept","temp_rangelow","temp_rangemedium")) |> 
+ggplot(aes(x = estimate, y = coeff)) +
+  geom_point(size = 4) +                    # Points for slopes
+  geom_errorbarh(aes(xmin = lower_ci, xmax = upper_ci), height = 0.2, size = 1) +  
+  geom_vline(xintercept = 0, linetype = "dashed") +    # Dashed line at 0
+  labs(x = "Standardized Slope (ΔY/Δsd(X))", y = NULL) + # Labels
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 16), 
+    axis.title = element_text(size =16),
+    panel.grid.minor = element_blank() 
+  )
+
+ggsave("../Output/coeff_struc.jpg", dpi = 300)
+```
+
+```{r}
+vcov(summary(avg))
+```
+

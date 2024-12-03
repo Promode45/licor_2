@@ -1,0 +1,380 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+data <- read_xlsx("../Data/resp_finalized.xlsx") |> 
+  mutate(ts = as.numeric(ts),
+         flux_mgco2 = (flux*44.01)/10^3,
+    flux_mgco2_kgc = flux_mgco2/c_stock_kgC_m2,
+    label = factor(label),
+    treatment = factor(treatment)) |> 
+  dplyr::select(-c(7:10))
+
+data_w <- data |> 
+  mutate(day = yday(date_time),
+         time = trunc_hms(as_hms(date_time), 5),
+         fertilization = case_when(treatment == "NPK" | treatment == "NPK+Disturbance" ~ "Fertilized",
+                                   .default = "Unfertilized"),
+         disturbance = case_when(treatment == "Disturbance" | treatment == "NPK+Disturbance" ~ "Disturbed",
+                                 .default = "Undisturbed"),
+         fertilization = factor(fertilization),
+         disturbance = factor(disturbance))
+data_temp <- data_w |> 
+  mutate(temp_range = case_when(ts <= 20 ~ "low",
+                   ts > 20 & ts <= 30 ~ "medium",
+                   ts > 30 ~ "high")) |> 
+  mutate(temp_range = factor(temp_range)) |> 
+  na.omit()
+```
+
+```{r fig.width= 10, fig.height=6}
+p1 <- data_w |> 
+  ggplot(aes(x = treatment))+
+  geom_boxplot(aes(y = micro, fill = "Microporespace"),width = 0.25, position = position_nudge(x = -0.25), alpha = 0.8)+
+  geom_boxplot(aes(y = micro_wfps, fill = "Water-filled micropores"), position = position_nudge(x = 0.25), width = 0.25, alpha = 0.8)+
+  theme_classic()+
+  theme(panel.grid.minor = element_blank(),
+        axis.text = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        strip.text = element_text(size = 15),  # Facet label text
+        legend.text = element_text(size = 13),
+        legend.title = element_blank(),
+        legend.position = "top",
+        plot.title = element_text(size = 15, face = "bold"))+
+  scale_fill_viridis_d()+
+  # scale_fill_viridis_d(breaks = c("Water-filled micropores", "Microporespace"),
+  #   values =c( "Water-filled micropores" = "#ADD8E6", "Microporespace" = "red"))+
+  labs(x = "Treatment",
+       y = " % Porespace")
+  
+```
+
+```{r}
+p2 <- data_w |> 
+  ggplot(aes(x = treatment))+
+  geom_boxplot(aes(y = small, fill = "Small porespace"),width = 0.25, position = position_nudge(x = -0.25), alpha = 0.8)+
+  geom_boxplot(aes(y = small_wfps, fill = "Water-filled small_sized pores"), position = position_nudge(x = 0.25), width = 0.25, alpha = 0.8)+
+  theme_classic()+
+  theme(panel.grid.minor = element_blank(),
+        axis.text = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        strip.text = element_text(size = 15),  # Facet label text
+        legend.text = element_text(size = 13),
+        legend.title = element_blank(),
+        legend.position = "top",
+        plot.title = element_text(size = 15, face = "bold"))+
+  scale_fill_viridis_d()+
+  # scale_fill_viridis_d(breaks = c("Water-filled micropores", "Microporespace"),
+  #   values =c( "Water-filled micropores" = "#ADD8E6", "Microporespace" = "red"))+
+  labs(x = "Treatment",
+       y = " % Porespace")
+```
+
+```{r}
+p3 <- data_w |> 
+  ggplot(aes(x = treatment))+
+  geom_boxplot(aes(y = medium, fill = "Medium porespace"),width = 0.25, position = position_nudge(x = -0.25), alpha = 0.8)+
+  geom_boxplot(aes(y = medium_wfps, fill = "Water-filled medium-sized pores"), position = position_nudge(x = 0.25), width = 0.25, alpha = 0.8)+
+  theme_classic()+
+  theme(panel.grid.minor = element_blank(),
+        axis.text = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        strip.text = element_text(size = 15),  # Facet label text
+        legend.text = element_text(size = 13),
+        legend.title = element_blank(),
+        legend.position = "top",
+        plot.title = element_text(size = 15, face = "bold"))+
+  scale_fill_viridis_d()+
+  # scale_fill_viridis_d(breaks = c("Water-filled micropores", "Microporespace"),
+  #   values =c( "Water-filled micropores" = "#ADD8E6", "Microporespace" = "red"))+
+  labs(x = "Treatment",
+       y = " % Porespace")
+```
+
+```{r}
+p4 <- data_w |> 
+  ggplot(aes(x = treatment))+
+  geom_boxplot(aes(y = macro, fill = "Large porespace"),width = 0.25, position = position_nudge(x = -0.25), alpha = 0.8)+
+  geom_boxplot(aes(y = macro_wfps, fill = "Water-filled Large-sized pores"), position = position_nudge(x = 0.25), width = 0.25, alpha = 0.8)+
+  theme_classic()+
+  theme(panel.grid.minor = element_blank(),
+        axis.text = element_text(size = 15),
+        axis.title = element_text(size = 15),
+        strip.text = element_text(size = 15),  # Facet label text
+        legend.text = element_text(size = 13),
+        legend.title = element_blank(),
+        legend.position = "top",
+        plot.title = element_text(size = 15, face = "bold"))+
+  scale_fill_viridis_d()+
+  # scale_fill_viridis_d(breaks = c("Water-filled micropores", "Microporespace"),
+  #   values =c( "Water-filled micropores" = "#ADD8E6", "Microporespace" = "red"))+
+  labs(x = "Treatment",
+       y = " Percent of Pore Volume")
+```
+
+```{r}
+data_w |> 
+  group_by(treatment) |> 
+  summarise(mean = mean(medium, na.rm = T),
+            se = sd(medium, na.rm = T)/sqrt(n())) |> 
+  ggplot(aes(x = treatment, y = mean, fill = treatment))+
+  geom_bar(stat = "identity")+
+  geom_col(color = "black") + 
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.4) + 
+  scale_fill_viridis_d()+
+ # scale_fill_manual(values = c("gray60", "grey39", "grey18", "grey5")) +
+  theme(
+    rect = element_rect(fill = "transparent"),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 14, color = "black"),
+    axis.title.y = element_text(size = 16), 
+    legend.text = element_text(size = 12),
+    strip.text.x = element_text(size = 13, face = "bold"),
+    panel.background = element_rect(fill = "transparent"), 
+    plot.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank()
+  ) 
+```
+
+```{r}
+data_w %>% 
+  group_by(treatment) %>%
+  summarise_at(
+    vars(c("micro","small","medium","macro")),
+    list(
+      mean = ~mean(., na.rm = TRUE),
+      se = ~sd(., na.rm = TRUE)/sqrt(n())
+    )
+  ) %>%
+  select(
+    treatment,
+    micro_mean,
+    micro_se,
+    small_mean,
+    small_se,
+    medium_se,
+    medium_mean,
+    macro_mean,
+    macro_se
+  ) %>% 
+  pivot_longer(
+    cols = 
+      c(
+    micro_mean,
+    micro_se,
+    small_mean,
+    small_se,
+    medium_se,
+    medium_mean,
+    macro_mean,
+    macro_se
+      ),
+    names_to = "pore_size_value",
+    values_to = "proportion"
+  ) %>% 
+  mutate(
+    value = str_extract(pore_size_value, "mean|se"),
+  ) %>% 
+  mutate_at(
+    vars(pore_size_value), 
+    ~ str_replace(., "_mean|_se", "")
+  ) %>% 
+  pivot_wider(
+    id_cols = c(treatment, pore_size_value),
+    names_from = value,
+    values_from = proportion
+  ) %>% 
+  mutate_at(
+    vars(treatment),
+    ~ factor(
+      .,
+      levels =
+        c(
+          "Control",
+          "Disturbance",
+          "NPK",
+          "NPK+Disturbance"
+        )
+    )
+  ) %>% 
+  mutate_at(
+    vars(pore_size_value),
+    ~ factor(
+      .,
+      levels = c("micro", "small", "medium", "macro"),
+      ordered = TRUE,
+      labels =
+        c(
+          expression(paste("< 0.6 ", mu, "m")),
+          expression(paste("0.6 - 1.0 ", mu, "m")),
+          expression(paste("1.0 - 3.0 ", mu, "m")),
+          expression(paste("> 3.0 ", mu, "m"))
+        )
+    )
+  ) %>% 
+  ggplot(aes(y = mean, x = treatment, fill = treatment)) + 
+  geom_col(color = "black") + 
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.4) + 
+  scale_fill_viridis_d()+
+  # scale_fill_manual(values = c("gray60", "grey39", "grey18","grey5")) + 
+  # scale_y_continuous(
+  #   labels = scales::percent_format(accuracy = 1),
+  #   expand = c(0.01,0.005, 0.01, 0.1)
+  # ) + 
+  facet_grid(cols = vars(pore_size_value), labeller = label_parsed) + 
+  labs(
+    fill = NULL,
+    x = NULL,
+    y = "Percent of Pore Volume"
+  ) + 
+  theme_bw() + 
+  theme(
+    rect = element_rect(fill = "transparent"),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 14, color = "black"),
+    axis.title.y = element_text(size = 16), 
+    legend.text = element_text(size = 12),
+    strip.text.x = element_text(size = 13, face = "bold"),
+    panel.background = element_rect(fill = "transparent"), 
+     plot.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank()
+  )
+#ggsave("../Output/porespace.jpg", dpi = 300)
+```
+https://stackoverflow.com/questions/76948847/obtaining-significance-letters-multcompview-while-performing-dunns-test
+```{r}
+kruskal.test(medium ~ treatment, data = data_w)
+library(FSA)
+
+dunn_results <- dunnTest(medium ~ treatment, data = data_w)
+library(rcompanion)
+
+cld = cldList(P.adj ~ Comparison, data = dunn_results$res) |> 
+  rename("treatment"="Group")
+
+```
+
+```{r}
+plasma_pal <- c("red", viridis::viridis(n=4))
+data_w %>% 
+  group_by(treatment) %>%
+  summarise_at(
+    vars(c("micro_wfps","small_wfps","medium_wfps","macro_wfps")),
+    list(
+      mean = ~mean(., na.rm = TRUE),
+      se = ~sd(., na.rm = TRUE)/sqrt(n())
+    )
+  ) %>%
+  select(
+    treatment,
+    micro_wfps_mean,
+    micro_wfps_se,
+    small_wfps_mean,
+    small_wfps_se,
+    medium_wfps_se,
+    medium_wfps_mean,
+    macro_wfps_mean,
+    macro_wfps_se
+  ) %>% 
+  pivot_longer(
+    cols = 
+      c(
+   micro_wfps_mean,
+    micro_wfps_se,
+    small_wfps_mean,
+    small_wfps_se,
+    medium_wfps_se,
+    medium_wfps_mean,
+    macro_wfps_mean,
+    macro_wfps_se
+      ),
+    names_to = "pore_size_value",
+    values_to = "proportion"
+  ) %>% 
+  mutate(
+    value = str_extract(pore_size_value, "mean|se"),
+  ) %>% 
+  mutate_at(
+    vars(pore_size_value), 
+    ~ str_replace(., "_mean|_se", "")
+  ) %>% 
+  pivot_wider(
+    id_cols = c(treatment, pore_size_value),
+    names_from = value,
+    values_from = proportion
+  ) %>% 
+  mutate_at(
+    vars(treatment),
+    ~ factor(
+      .,
+      levels =
+        c(
+          "Control",
+          "Disturbance",
+          "NPK",
+          "NPK+Disturbance"
+        )
+    )
+  ) %>% 
+  mutate_at(
+    vars(pore_size_value),
+    ~ factor(
+      .,
+      levels = c("micro_wfps", "small_wfps", "medium_wfps", "macro_wfps"),
+      ordered = TRUE,
+      labels =
+        c(
+          expression(paste("< 0.6 ", mu, "m")),
+          expression(paste("0.6 - 1.0 ", mu, "m")),
+          expression(paste("1.0 - 3.0 ", mu, "m")),
+          expression(paste("> 3.0 ", mu, "m"))
+        )
+    )
+  ) %>% 
+  ggplot(aes(y = mean, x = treatment, fill = treatment)) + 
+  geom_col(color = "black") + 
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.4) + 
+  scale_fill_manual(values = plasma_pal)+
+  # scale_fill_manual(values = c("gray60", "grey39", "grey18","grey5")) + 
+  # scale_y_continuous(
+  #   labels = scales::percent_format(accuracy = 1),
+  #   expand = c(0.01,0.005, 0.01, 0.1)
+  # ) + 
+  facet_grid(cols = vars(pore_size_value), labeller = label_parsed) + 
+  labs(
+    fill = NULL,
+    x = NULL,
+    y = "Percent of Water-Filled Pore Volume"
+  ) + 
+  theme_bw() + 
+  theme(
+    rect = element_rect(fill = "transparent"),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 14, color = "black"),
+    axis.title.y = element_text(size = 16), 
+    legend.text = element_text(size = 12),
+    strip.text.x = element_text(size = 13, face = "bold"),
+    panel.background = element_rect(fill = "transparent"), 
+     plot.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank()
+  )
+#ggsave("../Output/wfilledporevol.jpg", dpi = 300)
+```
+
+

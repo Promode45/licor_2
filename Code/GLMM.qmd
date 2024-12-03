@@ -29,6 +29,7 @@ library(emmeans)
 library(broom)
 library(multcomp)
 library(car)
+library(MuMIn)
 
 ```
 
@@ -318,6 +319,8 @@ visualize(struc_lmm,
 anova <- Anova(struc_lmm, type = 3) |> 
   as.data.frame()
 
+struc_w |> 
+  filter(wfps > 0.70)
 ```
 
 ```{r}
@@ -452,8 +455,10 @@ Anova(struc_lmm13, type = 3)
 summary(struc_lmm13)
 vif(struc_lmm13)
 ```
-```{r}
 
+```{r}
+global <- lmer(flux_mgco2_kgc ~ treatment + ts_sc + wfps_sc + root_density_sc + micro_sc + macro_sc + (1|label), data = temp_cat)
+trial <- dredge(global.model = global)
 ```
 
 ```{r}
